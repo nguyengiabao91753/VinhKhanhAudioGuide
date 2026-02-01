@@ -9,6 +9,8 @@ export function useLocation() {
     const svc = LocationService.getInstance();
     svc.start();
 
+    
+
     const unsub = svc.subscribe((loc)=> setLocation(loc));
     return ()=>{
       unsub();

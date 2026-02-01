@@ -67,27 +67,26 @@ export function MapView({
     }
 
     // poi markers
-   pois.forEach(poi => {
-  const el = document.createElement("div");
-  el.className = "poi-marker";
+    pois.forEach((poi) => {
+      let marker = markersRef.current.get(poi.id);
 
-  el.style.width = "16px";
-  el.style.height = "16px";
-  el.style.borderRadius = "50%";
-  el.style.background = activePoi?.id === poi.id ? "red" : "orange";
+      const localized =
+        poi.localizedData.find((l) => l.langCode === currentLanguage) ||
+        poi.localizedData[0];
 
-  el.addEventListener("click", (e) => {
-    e.stopPropagation(); // QUAN TRỌNG
-    onMarkerClick(poi);
-  });
+      if (!marker) {
+        marker = new mapboxgl.Marker({
+          color: activePoi?.id === poi.id ? "#ef4444" : "#f59e0b",
+        })
+          .setLngLat([poi.position.lng, poi.position.lat])
+          .addTo(map);
 
-  const marker = new mapboxgl.Marker(el)
-    .setLngLat([poi.position.lng, poi.position.lat])
-    .addTo(map);
-
-  markersRef.current.set(poi.id, marker);
-});
-
+        marker.getElement().addEventListener("click", () => onMarkerClick(poi));
+        markersRef.current.set(poi.id, marker);
+      } else {
+        marker.setLngLat([poi.position.lng, poi.position.lat]);
+      }
+    });
   }, [pois, userLocation, activePoi, currentLanguage]);
 
   return <div ref={mapRef} className={styles.mapContainer} />;
