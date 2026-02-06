@@ -1,0 +1,27 @@
+﻿@page "/pois/add"
+@using ManagementSystem.Components
+@using ManagementSystem.Dtos
+@using ManagementSystem.Services.IServices
+@inject IPoiClientService PoiService
+@inject NavigationManager Nav
+
+<h3>Add POI</h3>
+<PoiForm Model="model" />
+<button class="btn btn-success mt-3" disabled="@isSaving" @onclick="Save">Save</button>
+
+@code {
+    private PoiDto model = new()
+    {
+        Position = new PositionDto(),
+        LocalizedData = new List<PoiLocalizedDto> { new PoiLocalizedDto() }
+    };
+    private bool isSaving = false;
+
+    private async Task Save()
+    {
+        isSaving = true;
+        await PoiService.CreatePoiAsync(model, Guid.Parse("A466CE68-FFF5-4674-9B0B-0EDBA9A87ADB"));
+        isSaving = false;
+        Nav.NavigateTo("/pois");
+    }
+}

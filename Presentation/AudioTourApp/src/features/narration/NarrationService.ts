@@ -28,6 +28,7 @@ export class NarrationService {
     if (!force && this.currentPoi && this.currentPoi.id === poi.id && this.audioElement && !this.audioElement.paused) {
       return;
     }
+    
     this.currentPoi = poi;
 
     // pick localized entry

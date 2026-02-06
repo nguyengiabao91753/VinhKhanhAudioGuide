@@ -1,0 +1,130 @@
+﻿@using ManagementSystem.Dtos
+@using System.ComponentModel.DataAnnotations
+@inject IJSRuntime JS
+@inject IConfiguration Configuration
+
+<div class="row">
+    <div class="col-md-6 col-12">
+        <!-- Responsive: full width on mobile -->
+        <EditForm Model="Model">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+
+            <!-- LocalizedData[0] -->
+            <div class="form-group">
+                <label>Language Code</label>
+                <InputText @bind-Value="Model.LocalizedData[0].LangCode" class="form-control" placeholder="e.g., en-US" />
+            </div>
+            <div class="form-group">
+                <label>Name</label>
+                <InputText @bind-Value="Model.LocalizedData[0].Name" class="form-control" placeholder="POI Name (tự động từ search)" />
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <InputTextArea @bind-Value="Model.LocalizedData[0].Description" class="form-control" rows="3" placeholder="Description" />
+            </div>
+            <div class="form-group">
+                <label>Description Text</label>
+                <InputTextArea @bind-Value="Model.LocalizedData[0].DescriptionText" class="form-control" rows="3" placeholder="Text Description" />
+            </div>
+            <div class="form-group">
+                <label>Description Audio</label>
+                <InputText @bind-Value="Model.LocalizedData[0].DescriptionAudio" class="form-control" placeholder="Audio URL/Path" />
+            </div>
+
+            <!-- Other fields -->
+            <div class="form-group">
+                <label>Order</label>
+                <InputNumber @bind-Value="Model.Order" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label>Range (meters)</label>
+                <InputNumber @bind-Value="Model.Range" class="form-control" @oninput="UpdateCircle" />  <!-- Update circle động -->
+            </div>
+            <div class="form-group">
+                <label>Latitude</label>
+                <InputNumber @bind-Value="Model.Position.Lat" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label>Longitude</label>
+                <InputNumber @bind-Value="Model.Position.Lng" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label>Thumbnail</label>
+                <InputText @bind-Value="Model.Thumbnail" class="form-control" placeholder="Thumbnail URL/Path" />
+            </div>
+            <div class="form-group">
+                <label>Banner</label>
+                <InputText @bind-Value="Model.Banner" class="form-control" placeholder="Banner URL/Path" />
+            </div>
+        </EditForm>
+    </div>
+    <div class="col-md-6 col-12">
+        <!-- Map responsive -->
+        <div id="map" style="height: 400px; border-radius: 12px; width: 100%;"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public PoiDto Model { get; set; }
+    private string mapboxKey;
+    private DotNetObjectReference<PoiForm>? dotNetRef;  // Mới: Reference cho JS gọi instance method
+
+    protected override async Task OnInitializedAsync()
+    {
+        mapboxKey = Configuration["MAPBOX_KEY"];
+        if (string.IsNullOrEmpty(Model.Position.Type)) Model.Position.Type = "Point";
+        if (Model.Range == null) Model.Range = 3;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            dotNetRef = DotNetObjectReference.Create(this);  // Tạo ref cho component này
+            await JS.InvokeVoidAsync("initMap",
+                "map",
+                mapboxKey,
+                Model.Position.Lat ?? 10.8231,  // Default Sài Gòn nếu 0
+                Model.Position.Lng ?? 106.6297,
+                Model.Range ?? 3,
+                dotNetRef  // Pass ref vào JS
+            );
+        }
+    }
+
+    private async Task UpdateCircle(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newRange))
+        {
+            Model.Range = newRange;
+            await JS.InvokeVoidAsync("updateCircle", newRange);
+        }
+    }
+
+    [JSInvokable]
+    public void SetLatLng(double lat, double lng)
+    {
+        Model.Position.Lat = lat;
+        Model.Position.Lng = lng;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void SetPoiFromSearch(string name, double lat, double lng)
+    {
+        Model.LocalizedData[0].Name = name;  // Tên địa điểm thực tế (e.g., "Vĩnh Khánh Street, Phường 10, Quận 4, TP.HCM")
+        Model.Position.Lat = lat;
+        Model.Position.Lng = lng;
+        StateHasChanged();  // Buộc render lại form
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (dotNetRef != null)
+        {
+            dotNetRef.Dispose();
+            dotNetRef = null;
+        }
+    }
+}
