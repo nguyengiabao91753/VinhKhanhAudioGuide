@@ -1,19 +1,16 @@
-import React from 'react';
-import type { PoiDto } from '../entities/PoiDto';
+import type { PoiDto } from '../../entities/poi';
 
 interface Props {
   poi: PoiDto | null;
   distance: number | null;
   isPlaying: boolean;
-  isPaused: boolean;
   currentLanguage: string;
   onPlay: () => void;
   onPause: () => void;
-  onResume: () => void;
   onCollapse: ()=>void;
 }
 
-export default function PoiInfoPanel({ poi, distance, isPlaying, isPaused, currentLanguage, onPlay, onPause, onResume }: Props) {
+export function PoiInfoPanel({ poi, distance, isPlaying, currentLanguage, onPlay, onPause }: Props) {
   if (!poi) {
     return <div style={{padding:12}}>No active POI. Move closer to a point to start narration.</div>;
   }

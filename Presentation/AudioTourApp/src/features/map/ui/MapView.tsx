@@ -1,11 +1,9 @@
 import { useEffect, useRef } from "react";
-import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import type { PoiDto } from "../../entities/PoiDto";
-import type { Location } from "../location/LocationService";
+import type { PoiDto } from "../../../entities/poi";
+import type { Location } from "../../location";
+import { mapboxgl } from "../lib/mapboxSetup";
 import styles from "./MapView.module.css";
-
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 interface MapViewProps {
   pois: PoiDto[];
@@ -69,10 +67,6 @@ export function MapView({
     // poi markers
     pois.forEach((poi) => {
       let marker = markersRef.current.get(poi.id);
-
-      const localized =
-        poi.localizedData.find((l) => l.langCode === currentLanguage) ||
-        poi.localizedData[0];
 
       if (!marker) {
         marker = new mapboxgl.Marker({

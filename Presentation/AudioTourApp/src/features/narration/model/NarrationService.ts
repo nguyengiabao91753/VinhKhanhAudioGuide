@@ -1,4 +1,4 @@
-import type { PoiDto } from '../../entities/PoiDto';
+import type { PoiDto } from '../../../entities/poi';
 
 type Subscriber = (state: { isPlaying:boolean; isPaused:boolean; currentPoi: PoiDto | null }) => void;
 

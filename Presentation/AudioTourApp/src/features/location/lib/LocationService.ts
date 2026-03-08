@@ -57,19 +57,21 @@ export class LocationService {
     }
   }
 
-  subscribe(cb: LocationCallback) {
+  public subscribe(cb: LocationCallback) {
     this.subscribers.push(cb);
-    return () => { this.subscribers = this.subscribers.filter(x => x !== cb); };
-  }
-  subscribeError(cb: ErrorCallback){
-    this.errorSubscribers.push(cb);
-    return () => { this.errorSubscribers = this.errorSubscribers.filter(x=>x!==cb); };
+    return () => { this.subscribers = this.subscribers.filter(x=>x!==cb); }
   }
 
-  private notifySubscribers(loc: Location){
+  public subscribeError(cb: ErrorCallback) {
+    this.errorSubscribers.push(cb);
+    return () => { this.errorSubscribers = this.errorSubscribers.filter(x=>x!==cb); }
+  }
+
+  private notifySubscribers(loc: Location) {
     this.subscribers.forEach(cb => cb(loc));
   }
-  private notifyError(err: LocationError){
+
+  private notifyError(err: LocationError) {
     this.errorSubscribers.forEach(cb => cb(err));
   }
 }

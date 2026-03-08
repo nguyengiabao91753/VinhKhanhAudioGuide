@@ -1,4 +1,4 @@
-import type { PoiDto } from '../entities/PoiDto';
+import type { PoiDto } from '../../entities/poi';
 
 const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:5000/api';
 

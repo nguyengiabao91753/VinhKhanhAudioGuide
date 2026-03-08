@@ -1,5 +1,5 @@
-import type { PoiDto } from '../../entities/PoiDto';
-import type { Location } from '../location/LocationService';
+import type { PoiDto } from '../../../entities/poi';
+import type { Location } from '../../location';
 
 export interface GeofenceEvent {
   activePoi: PoiDto | null;
@@ -40,7 +40,6 @@ export class GeofenceService {
 
   evaluate(location: Location, radius = 10) {
     if (!this.pois || this.pois.length === 0) {
-      this.publish(null, 0);
       return;
     }
 
@@ -61,7 +60,6 @@ export class GeofenceService {
       const last = this.lastTriggeredAt[nearest.id] || 0;
       if (this.activePoi && this.activePoi.id === nearest.id && now - last < 15000) {
         // ignore repeated triggers within 15s
-        this.publish(this.activePoi, nearestDist);
         return;
       }
       this.lastTriggeredAt[nearest.id] = now;
@@ -69,12 +67,7 @@ export class GeofenceService {
 
     const previous = this.activePoi;
     this.activePoi = nearest;
-    this.publish(this.activePoi, nearestDist === Number.POSITIVE_INFINITY ? 0 : nearestDist);
     // notify subscribers
     this.subscribers.forEach(cb => cb({ activePoi: this.activePoi, previousPoi: previous, distance: nearestDist }));
-  }
-
-  private publish(active: PoiDto | null, distance: number) {
-    // No-op: this function kept for clarity (subscribers invoked above)
   }
 }

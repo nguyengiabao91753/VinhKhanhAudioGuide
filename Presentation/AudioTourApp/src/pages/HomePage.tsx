@@ -1,13 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { MapView } from '../features/map/MapView';
-import PoiInfoPanel from '../components/PoiInfoPanel';
-import LanguageSelector from '../components/LanguageSelector';
-import { useLocation } from '../features/location/useLocation';
-import { LocationService } from '../features/location/LocationService';
-import { GeofenceService } from '../features/geofence/GeofenceService';
-import { NarrationService } from '../features/narration/NarrationService';
-import { fetchPois } from '../api/poiApi';
-import type { PoiDto } from '../entities/PoiDto';
+import { useEffect, useState } from 'react';
+import { MapView } from '../features/map';
+import { PoiInfoPanel } from '../widgets/poiPanel';
+import { LanguageSelector } from '../features/languageSelection';
+import { useLocation } from '../features/location';
+import { GeofenceService } from '../features/geofence';
+import { NarrationService } from '../features/narration';
+import { fetchPois } from '../shared/lib';
+import type { PoiDto } from '../entities/poi';
 import '../styles/global.css';
 
 export default function HomePage() {
@@ -70,11 +69,9 @@ export default function HomePage() {
               poi={activePoi}
               distance={activePoi && location ? GeofenceService.getInstance().distanceBetween(location.latitude, location.longitude, activePoi.position.lat, activePoi.position.lng) : null}
               isPlaying={NarrationService.getInstance().isPlaying()}
-              isPaused={NarrationService.getInstance().isPaused()}
               currentLanguage={currentLanguage}
               onPlay={() => activePoi && NarrationService.getInstance().playPoi(activePoi, false)}
               onPause={() => NarrationService.getInstance().pause()}
-              onResume={() => NarrationService.getInstance().resume()}
               onCollapse={() => {}}
             />
           </div>
