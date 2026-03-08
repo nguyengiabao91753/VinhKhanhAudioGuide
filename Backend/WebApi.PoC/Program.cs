@@ -29,6 +29,7 @@ builder.Services.Configure<CloudinarySetting>(
 // Add services to the container.
 
 builder.Services.AddScoped<IPOIService, POIService>(); 
+builder.Services.AddScoped<ITourService, TourService>();
 
 
 builder.Services.AddControllers();

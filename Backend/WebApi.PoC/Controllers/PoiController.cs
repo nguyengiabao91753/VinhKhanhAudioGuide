@@ -2,57 +2,99 @@
 using WebApi.PoC.Dtos;
 using WebApi.PoC.Services.IServices;
 
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-
 namespace WebApi.PoC.Controllers;
+
 [Route("api/pois")]
 [ApiController]
 public class PoiController : ControllerBase
 {
     private readonly IPOIService _poiService;
+
     public PoiController(IPOIService poiService)
     {
         _poiService = poiService;
     }
-    // GET: api/<PoiController>
-    [HttpGet("get-all")]
-    public async Task<IActionResult> Get()
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
     {
         var pois = await _poiService.GetAllPOIsAsync();
-        return Ok(pois);
+        return Ok(new { data = pois });
     }
 
-    [HttpGet("get-by-id/{id}")]
+    [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
         var poi = await _poiService.GetPoiByIdAsync(id);
         if (poi == null)
         {
-            return NotFound();
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "POI_NOT_FOUND",
+                    message = "POI not found."
+                }
+            });
         }
-        return Ok(poi);
+
+        return Ok(new { data = poi });
     }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] PoiDto poiDto, [FromQuery] Guid tourId)
+    public async Task<IActionResult> Create([FromBody] PoiDto poiDto)
     {
-        var createdPoi = await _poiService.AddNewPoi(poiDto, tourId);
+        var createdPoi = await _poiService.AddNewPoi(poiDto);
         if (createdPoi == null)
         {
-            return BadRequest();
+            return BadRequest(new
+            {
+                error = new
+                {
+                    code = "POI_CREATE_FAILED",
+                    message = "Failed to create POI."
+                }
+            });
         }
-        return Ok(createdPoi);
+
+        return Ok(new { data = createdPoi });
     }
 
-    [HttpPost("update")]
-    public async Task<IActionResult> Update([FromBody] PoiDto poiDto)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(Guid id, [FromBody] PoiDto poiDto)
     {
-        var updatedPoi = await _poiService.UpdatePoiAsync(poiDto);
+        var updatedPoi = await _poiService.UpdatePoiAsync(id, poiDto);
         if (updatedPoi == null)
         {
-            return NotFound();
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "POI_NOT_FOUND",
+                    message = "POI not found."
+                }
+            });
         }
-        return Ok(updatedPoi);
+
+        return Ok(new { data = updatedPoi });
     }
 
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var deleted = await _poiService.DeletePoiAsync(id);
+        if (!deleted)
+        {
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "POI_NOT_FOUND",
+                    message = "POI not found."
+                }
+            });
+        }
+
+        return Ok(new { data = true });
+    }
 }
