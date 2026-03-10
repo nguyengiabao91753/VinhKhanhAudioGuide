@@ -1,0 +1,52 @@
+.container {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 16px 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.header {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  padding-left: 4px;
+}
+.item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+.item:hover {
+  background-color: #f0f0f0;
+  border-color: #ff6b35;
+}
+.stopNumber {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #ff6b35;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.poiInfo {
+  flex: 1;
+}
+.poiName {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.poiDesc {
+  font-size: 12px;
+  color: #999;
+  line-height: 1.3;
+}

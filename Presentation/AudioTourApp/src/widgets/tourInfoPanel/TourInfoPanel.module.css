@@ -1,0 +1,42 @@
+.panel {
+  background-color: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.title {
+  margin: 0 0 12px 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+.description {
+  margin: 0 0 16px 0;
+  font-size: 15px;
+  color: #666;
+  line-height: 1.5;
+}
+.metaGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+.metaItem {
+  text-align: center;
+  padding: 12px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+}
+.metaIcon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+.metaValue {
+  font-size: 14px;
+  font-weight: 600;
+}
+.metaLabel {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}

@@ -1,0 +1,1 @@
+export { TourInfoPanel } from './TourInfoPanel';
