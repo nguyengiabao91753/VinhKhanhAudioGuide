@@ -2,9 +2,8 @@
 using WebApi.PoC.Dtos;
 using WebApi.PoC.Services.IServices;
 
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-
 namespace WebApi.PoC.Controllers;
+
 [Route("api/pois")]
 [ApiController]
 public class PoiController : ControllerBase
@@ -21,7 +20,7 @@ public class PoiController : ControllerBase
     public async Task<IActionResult> Get()
     {
         var pois = await _poiService.GetAllPOIsAsync();
-        return Ok(pois);
+        return Ok(new { data = pois });
     }
 
     [HttpGet("{id}")]
@@ -30,9 +29,17 @@ public class PoiController : ControllerBase
         var poi = await _poiService.GetPoiByIdAsync(id);
         if (poi == null)
         {
-            return NotFound();
+            return NotFound(new
+            {
+                error = new
+                {
+                    code = "POI_NOT_FOUND",
+                    message = "POI not found."
+                }
+            });
         }
-        return Ok(poi);
+
+        return Ok(new { data = poi });
     }
 
     [HttpPost]

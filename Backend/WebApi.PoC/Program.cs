@@ -30,6 +30,8 @@ builder.Services.Configure<CloudinarySetting>(
 
 builder.Services.AddScoped<IPOIService, POIService>();
 builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
+builder.Services.AddScoped<IPOIService, POIService>(); 
+builder.Services.AddScoped<ITourService, TourService>();
 
 
 builder.Services.AddControllers();
