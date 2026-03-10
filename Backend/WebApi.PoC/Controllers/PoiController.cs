@@ -10,19 +10,21 @@ namespace WebApi.PoC.Controllers;
 public class PoiController : ControllerBase
 {
     private readonly IPOIService _poiService;
-    public PoiController(IPOIService poiService)
+    private readonly ICloudinaryService _cloudinaryService;
+    public PoiController(IPOIService poiService, ICloudinaryService cloudinaryService)
     {
         _poiService = poiService;
+        _cloudinaryService = cloudinaryService;
     }
     // GET: api/<PoiController>
-    [HttpGet("get-all")]
+    [HttpGet]
     public async Task<IActionResult> Get()
     {
         var pois = await _poiService.GetAllPOIsAsync();
         return Ok(pois);
     }
 
-    [HttpGet("get-by-id/{id}")]
+    [HttpGet("{id}")]
     public async Task<IActionResult> GetById(Guid id)
     {
         var poi = await _poiService.GetPoiByIdAsync(id);
@@ -34,25 +36,105 @@ public class PoiController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] PoiDto poiDto, [FromQuery] Guid tourId)
+    public async Task<IActionResult> Post([FromForm] CreatePoiRequestDto request, [FromQuery] Guid tourId)
     {
-        var createdPoi = await _poiService.AddNewPoi(poiDto, tourId);
-        if (createdPoi == null)
+        try
         {
-            return BadRequest();
+            string? thumbnailUrl = null;
+            string? bannerUrl = null;
+
+            if (request.Thumbnail != null)
+            {
+                var uploadResult = await _cloudinaryService.UploadImageAsync(request.Thumbnail);
+                thumbnailUrl = uploadResult;
+            }
+
+            if (request.Banner != null)
+            {
+                var uploadResult = await _cloudinaryService.UploadImageAsync(request.Banner);
+                bannerUrl = uploadResult;
+            }
+
+            var poiDto = new PoiDto
+            {
+                Order = request.Order,
+                Range = request.Range,
+                Thumbnail = thumbnailUrl,
+                Banner = bannerUrl,
+                Position = request.Position,
+                LocalizedData = request.LocalizedData
+            };
+
+            var createdPoi = await _poiService.AddNewPoi(poiDto, tourId);
+            if (createdPoi == null)
+            {
+                return BadRequest("Failed to create POI.");
+            }
+            return Ok(createdPoi);
         }
-        return Ok(createdPoi);
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
     }
 
-    [HttpPost("update")]
-    public async Task<IActionResult> Update([FromBody] PoiDto poiDto)
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(Guid guid, [FromForm] CreatePoiRequestDto request)
     {
-        var updatedPoi = await _poiService.UpdatePoiAsync(poiDto);
-        if (updatedPoi == null)
+        try
+        {
+            string? thumbnailUrl = null;
+            string? bannerUrl = null;
+
+            if (request.Thumbnail != null)
+            {
+                var uploadResult = await _cloudinaryService.UploadImageAsync(request.Thumbnail);
+                thumbnailUrl = uploadResult;
+            }
+
+            if (request.Banner != null)
+            {
+                var uploadResult = await _cloudinaryService.UploadImageAsync(request.Banner);
+                bannerUrl = uploadResult;
+            }
+
+            var poiDto = new PoiDto
+            {
+                Order = request.Order,
+                Range = request.Range,
+                Thumbnail = thumbnailUrl,
+                Banner = bannerUrl,
+                Position = request.Position,
+                LocalizedData = request.LocalizedData
+            };
+
+            var updatedPoi = await _poiService.UpdatePoiAsync(poiDto);
+            if (updatedPoi == null)
+            {
+                return BadRequest("Failed to update POI.");
+            }
+
+            return Ok(updatedPoi);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> Delete(Guid id)
+    {
+        var affectedTours = _poiService.DeletePoiAsync(id);
+        if (affectedTours == null)
         {
             return NotFound();
         }
-        return Ok(updatedPoi);
-    }
 
+        return Ok(new
+        {
+            affectedTours
+        }
+            );
+    }
 }

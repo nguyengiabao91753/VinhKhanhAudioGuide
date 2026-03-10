@@ -176,4 +176,45 @@ public class POIService : IPOIService
 
         }
     }
+
+    public async Task<IEnumerable<Guid>?> DeletePoiAsync(Guid id)
+    {
+        try
+        {
+            var poi = await _db.pois
+                .Include(p => p.pois_localizedData)
+                .Include(p => p.position)
+                .FirstOrDefaultAsync(p => p._id == id);
+
+            if(poi == null)
+            {
+                return null;
+            }
+
+            var tourAffected = await _db.tour_points
+                .Where(tp => tp.tour_point_id == id)
+                .Select(tp => tp.id_tour)
+                .ToListAsync();
+
+            var tourPoints = await _db.tour_points
+                .Where(tp => tp.tour_point_id == id)
+                .ToListAsync();
+
+            _db.tour_points.RemoveRange(tourPoints);
+
+            _db.pois_localizedData.RemoveRange(poi.pois_localizedData);
+
+            _db.position.RemoveRange(poi.position);
+
+            _db.pois.Remove(poi);
+
+            await _db.SaveChangesAsync();
+
+            return tourAffected;
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
 }
