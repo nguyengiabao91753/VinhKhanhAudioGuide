@@ -4,4 +4,7 @@
 // export { DashboardPage } from './dashboard';
 // export { SettingsPage } from './settings';
 
-export {};
+export { LoginPage } from './login';
+export { DashboardPage } from './dashboard';
+export { PoisPage } from './pois';
+export { ToursPage } from './tours';
