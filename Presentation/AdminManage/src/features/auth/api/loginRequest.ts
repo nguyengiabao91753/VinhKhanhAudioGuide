@@ -1,15 +1,13 @@
-import type { LoginCredentials } from '../model/auth.types';
-
-const VALID_USERNAME = 'admin';
-const VALID_PASSWORD = 'admin2026';
+import { apiFetch } from '@/shared/api/http';
+import type { LoginCredentials, LoginResponse } from '../model/auth.types';
 
 /**
- * Fake login request that validates hardcoded credentials.
- * Mimics async API call for demo purposes.
+ * Login request that calls the real backend API
+ * Exchanges email/password for JWT token
  */
-export const loginRequest = async (credentials: LoginCredentials): Promise<boolean> => {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  return (
-    credentials.username === VALID_USERNAME && credentials.password === VALID_PASSWORD
-  );
+export const loginRequest = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+  return apiFetch<LoginResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  });
 };

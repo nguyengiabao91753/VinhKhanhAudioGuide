@@ -3,42 +3,39 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/app/providers/AuthProvider';
 
 export const LoginForm = () => {
-  const { login } = useAuth();
+  const { login, isLoading } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
 
-    setLoading(true);
-    const isValid = await login({ username, password });
-    setLoading(false);
-
-    if (isValid) {
+    try {
+      await login({ email, password });
       navigate('/dashboard', { replace: true });
-      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Login failed. Please try again.';
+      setError(message);
     }
-
-    setError('Invalid credentials');
   };
 
   return (
     <form onSubmit={handleSubmit} style={{ maxWidth: 320, margin: '0 auto' }}>
       <div style={{ marginBottom: 12 }}>
-        <label htmlFor="username" style={{ display: 'block', marginBottom: 4 }}>
-          Username
+        <label htmlFor="email" style={{ display: 'block', marginBottom: 4 }}>
+          Email
         </label>
         <input
-          id="username"
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          placeholder="admin"
+          id="email"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          placeholder="admin@example.com"
           required
-          autoComplete="username"
+          autoComplete="email"
           style={{ width: '100%', padding: 8, boxSizing: 'border-box' }}
         />
       </div>
@@ -60,21 +57,22 @@ export const LoginForm = () => {
       </div>
 
       {error && (
-        <div style={{ color: 'red', marginBottom: 12 }} role="alert">
+        <div style={{ color: 'red', marginBottom: 12, fontSize: '0.875rem' }} role="alert">
           {error}
         </div>
       )}
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={isLoading}
         style={{
           width: '100%',
           padding: 10,
-          cursor: loading ? 'not-allowed' : 'pointer',
+          cursor: isLoading ? 'not-allowed' : 'pointer',
+          opacity: isLoading ? 0.6 : 1,
         }}
       >
-        {loading ? 'Logging in…' : 'Login'}
+        {isLoading ? 'Logging in…' : 'Login'}
       </button>
     </form>
   );

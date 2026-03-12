@@ -1,5 +1,4 @@
 import '../index.css';
-import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './providers/AuthProvider';
 import { AppRouter } from './router/AppRouter';
 
@@ -38,7 +37,6 @@ function App() {
         </Route>
       </Routes>
     </BrowserRouter>
-  )
-}
+  
 
 export default App

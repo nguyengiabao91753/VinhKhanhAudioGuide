@@ -1,6 +1,6 @@
 import type { AuthUser } from './auth.types';
 
-const STORAGE_KEY = 'admin_user';
+const STORAGE_KEY = 'admin_auth';
 
 export const getStoredAuthUser = (): AuthUser | null => {
   try {
@@ -18,4 +18,10 @@ export const setStoredAuthUser = (user: AuthUser) => {
 
 export const clearStoredAuthUser = () => {
   localStorage.removeItem(STORAGE_KEY);
+};
+
+export const isTokenExpired = (): boolean => {
+  const auth = getStoredAuthUser();
+  if (!auth?.expiresAt) return false;
+  return Date.now() > auth.expiresAt;
 };
