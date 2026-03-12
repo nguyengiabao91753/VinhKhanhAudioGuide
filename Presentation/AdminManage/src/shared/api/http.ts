@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:5111/api'
+const API_BASE_URL = import.meta.env.VITE_API_ENDPOINT || 'https://localhost:7047/api'
 
 export async function apiFetch<T>(
   endpoint: string,
@@ -17,9 +17,9 @@ export async function apiFetch<T>(
   }
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(typeof options?.headers === 'object' ? options.headers : {}),
-  }
+  'Content-Type': 'application/json',
+  ...(options?.headers as Record<string, string> ?? {}),
+}
 
   // Inject JWT token if available
   if (authToken) {
