@@ -15,7 +15,7 @@ public class AuthService : IAuthService
             return Task.FromResult(new LoginResponse
             {
                 Success = false,
-                Message = "Invalid username or password"
+                Message = "Invalid credentials"
             });
         }
 
