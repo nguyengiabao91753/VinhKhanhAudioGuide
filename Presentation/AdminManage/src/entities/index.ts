@@ -20,8 +20,8 @@ export interface PoiDto {
   id: string;
   order: number;
   range: number; // Detection radius in meters
-  thumbnail: string;
-  banner: string;
+  thumbnail: string | null;
+  banner: string | null;
   position: Position;
   localizedData: LocalizedData[];
 }

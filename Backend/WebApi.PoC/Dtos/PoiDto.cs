@@ -14,12 +14,3 @@ public class PoiDto
 
     public List<PoiLocalizedDto> LocalizedData { get; set; }
 }
-
-
-public class TourDto
-{
-    public Guid Id { get; set; }
-    public string Name { get; set; }
-
-    public List<PoiDto> Pois { get; set; }
-}
