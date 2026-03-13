@@ -13,7 +13,49 @@ public class POIService : IPOIService
     {
         _db = db;
     }
+    public async Task<PoiDto?> AddNewPoi(PoiDto poiDto, Guid tourId)
+    {
+        try
+        {
+            var poi = new pois
+            {
+                range = poiDto.Range,
+                thumbnail = poiDto.Thumbnail,
+                banner = poiDto.Banner,
+                position = new position
+                {
+                    type = poiDto.Position.Type,
+                    coordinates_x = poiDto.Position.Lng,
+                    coordinates_y = poiDto.Position.Lat
+                },
+                pois_localizedData = poiDto.LocalizedData.Select(ld => new pois_localizedData
+                {
+                    lang_code = ld.LangCode,
+                    name = ld.Name,
+                    description = ld.Description,
+                    description_text = ld.DescriptionText,
+                    description_audio = ld.DescriptionAudio
+                }).ToList()
+            };
+            await _db.pois.AddAsync(poi);
 
+            await _db.SaveChangesAsync();
+            _db.tour_points.Add(new tour_points
+            {
+                tour_point_id = poi._id,
+                id_tour = tourId,
+                order = poiDto.Order
+            });
+
+            await _db.SaveChangesAsync();
+
+            return poiDto;
+        }
+        catch (Exception ex)
+        {
+            throw;
+        }
+    }
     public async Task<IEnumerable<PoiDto>> GetAllPOIsAsync()
     {
         var pois = await _db.pois
@@ -83,42 +125,50 @@ public class POIService : IPOIService
         return poi;
     }
 
-    public async Task<PoiDto?> AddNewPoi(PoiDto poiDto)
+
+
+    public async Task<PoiDto?> UpdatePoiAsync(PoiDto poiDto)
     {
-        if (poiDto.Position == null)
-            throw new ArgumentException("Position is required.");
-
-        if (poiDto.Position.Lat == 0 || poiDto.Position.Lng == 0)
-            throw new ArgumentException("Lat/Lng cannot be 0.");
-
-        var poi = new pois
+        try
         {
-            range = poiDto.Range,
-            thumbnail = poiDto.Thumbnail,
-            banner = poiDto.Banner,
-            position = new position
+            var poi = await _db.pois
+                .Include(p => p.position)
+                .Include(p => p.pois_localizedData)
+                .FirstOrDefaultAsync(p => p._id == poiDto.Id);
+            if (poi == null)
             {
-                type = poiDto.Position.Type,
-                coordinates_x = poiDto.Position.Lng,
-                coordinates_y = poiDto.Position.Lat
-            },
-            pois_localizedData = poiDto.LocalizedData.Select(ld => new pois_localizedData
+                return null;
+            }
+            poi.range = poiDto.Range;
+            poi.thumbnail = poiDto.Thumbnail;
+            poi.banner = poiDto.Banner;
+            poi.position.type = poiDto.Position.Type;
+            poi.position.coordinates_x = poiDto.Position.Lng;
+            poi.position.coordinates_y = poiDto.Position.Lat;
+            // Update localized data
+            foreach (var ldDto in poiDto.LocalizedData)
             {
-                lang_code = ld.LangCode,
-                name = ld.Name,
-                description = ld.Description,
-                description_text = ld.DescriptionText,
-                description_audio = ld.DescriptionAudio
-            }).ToList()
-        };
+                var ld = poi.pois_localizedData.FirstOrDefault(x => x.lang_code == ldDto.LangCode);
+                if (ld != null)
+                {
+                    ld.name = ldDto.Name;
+                    ld.description = ldDto.Description;
+                    ld.description_text = ldDto.DescriptionText;
+                    ld.description_audio = ldDto.DescriptionAudio;
+                }
+            }
+            await _db.SaveChangesAsync();
+            return poiDto;
 
-        await _db.pois.AddAsync(poi);
-        await _db.SaveChangesAsync();
 
-        poiDto.Id = poi._id;
-        return poiDto;
+
+        }
+        catch (Exception ex)
+        {
+            return new PoiDto();
+
+        }
     }
-
     public async Task<PoiDto?> UpdatePoiAsync(Guid id, PoiDto poiDto)
     {
         var poi = await _db.pois
@@ -173,40 +223,40 @@ public class POIService : IPOIService
         return poiDto;
     }
 
-    public async Task<bool> DeletePoiAsync(Guid id)
-    {
-        var poi = await _db.pois
-            .Include(p => p.pois_localizedData)
-            .Include(p => p.position)
-            .FirstOrDefaultAsync(p => p._id == id);
+    //public async Task<bool> DeletePoiAsync(Guid id)
+    //{
+    //    var poi = await _db.pois
+    //        .Include(p => p.pois_localizedData)
+    //        .Include(p => p.position)
+    //        .FirstOrDefaultAsync(p => p._id == id);
 
-        if (poi == null)
-            return false;
+    //    if (poi == null)
+    //        return false;
 
-        var tourPoints = await _db.tour_points
-            .Where(tp => tp.tour_point_id == id)
-            .ToListAsync();
+    //    var tourPoints = await _db.tour_points
+    //        .Where(tp => tp.tour_point_id == id)
+    //        .ToListAsync();
 
-        if (tourPoints.Any())
-        {
-            _db.tour_points.RemoveRange(tourPoints);
-        }
+    //    if (tourPoints.Any())
+    //    {
+    //        _db.tour_points.RemoveRange(tourPoints);
+    //    }
 
-        if (poi.pois_localizedData != null && poi.pois_localizedData.Any())
-        {
-            _db.pois_localizedData.RemoveRange(poi.pois_localizedData);
-        }
+    //    if (poi.pois_localizedData != null && poi.pois_localizedData.Any())
+    //    {
+    //        _db.pois_localizedData.RemoveRange(poi.pois_localizedData);
+    //    }
 
-        if (poi.position != null)
-        {
-            _db.position.Remove(poi.position);
-        }
+    //    if (poi.position != null)
+    //    {
+    //        _db.position.Remove(poi.position);
+    //    }
 
-        _db.pois.Remove(poi);
-        await _db.SaveChangesAsync();
+    //    _db.pois.Remove(poi);
+    //    await _db.SaveChangesAsync();
 
-        return true;
-    }
+    //    return true;
+    //}
 
     public async Task<IEnumerable<Guid>?> DeletePoiAsync(Guid id)
     {
