@@ -7,21 +7,33 @@ import { clearStoredAuthUser, getStoredAuthUser, setStoredAuthUser, isTokenExpir
 type AuthContextValue = {
   user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<AuthUser | void>;
   logout: () => void;
   isLoading: boolean;
   error: string | null;
+  initializing: boolean;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const AUTH_DISABLED = import.meta.env.VITE_DISABLE_AUTH === 'true';
+const DEV_USER: AuthUser = {
+  id: 'dev-admin',
+  username: 'Admin',
+  email: 'admin@dev.local',
+  token: 'dev-token',
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(AUTH_DISABLED ? DEV_USER : null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(!AUTH_DISABLED);
 
   // Initialize auth from storage on mount
   useEffect(() => {
+    if (AUTH_DISABLED) return;
+    setInitializing(true);
     try {
       const auth = getStoredAuthUser();
       if (auth && !isTokenExpired()) {
@@ -32,10 +44,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch {
       clearStoredAuthUser();
+    } finally {
+      setInitializing(false);
     }
   }, []);
 
   const login = async (credentials: LoginCredentials) => {
+    if (AUTH_DISABLED) {
+      setUser(DEV_USER);
+      return DEV_USER;
+    }
     setIsLoading(true);
     setError(null);
     try {
@@ -50,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setUser(authenticatedUser);
       setStoredAuthUser(authenticatedUser);
+      return authenticatedUser;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
@@ -60,14 +79,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    if (AUTH_DISABLED) {
+      return;
+    }
     setUser(null);
     setError(null);
     clearStoredAuthUser();
   };
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: Boolean(user), login, logout, isLoading, error }),
-    [user, isLoading, error],
+    () => ({
+      user,
+      isAuthenticated: AUTH_DISABLED ? true : Boolean(user),
+      login,
+      logout,
+      isLoading,
+      error,
+      initializing,
+    }),
+    [user, isLoading, error, initializing],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

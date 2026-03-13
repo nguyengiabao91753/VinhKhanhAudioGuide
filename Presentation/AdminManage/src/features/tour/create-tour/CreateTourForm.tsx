@@ -9,11 +9,16 @@ type CreateTourFormProps = {
   onSuccess?: () => void
 }
 
+type PoiFilter = 'all' | 'major' | 'minor'
+
 export function CreateTourForm({ onSuccess }: CreateTourFormProps) {
   const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [durationMinutes, setDurationMinutes] = useState(120)
   const [pois, setPois] = useState<Poi[]>([])
   const [selectedPoiIds, setSelectedPoiIds] = useState<string[]>([])
   const [poiSearchKeyword, setPoiSearchKeyword] = useState('')
+  const [poiFilter, setPoiFilter] = useState<PoiFilter>('all')
   const [loadingPois, setLoadingPois] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -28,22 +33,29 @@ export function CreateTourForm({ onSuccess }: CreateTourFormProps) {
 
   const filteredPois = useMemo(() => {
     const keyword = poiSearchKeyword.trim().toLowerCase()
-    if (!keyword) return pois
+    return pois.filter((poi) => {
+      const matchesKeyword = !keyword
+        ? true
+        : poi.localizedData.some(
+            (item) =>
+              item.name.toLowerCase().includes(keyword) ||
+              item.description.toLowerCase().includes(keyword)
+          )
 
-    return pois.filter((poi) =>
-      poi.localizedData.some(
-        (item) =>
-          item.name.toLowerCase().includes(keyword) ||
-          item.description.toLowerCase().includes(keyword)
-      )
-    )
-  }, [pois, poiSearchKeyword])
+      const viData = poi.localizedData.find((item) => item.langCode === 'vi') ??
+        poi.localizedData[0]
+      const category = viData?.descriptionAudio || 'MAIN'
+      const isMajor = category === 'MAIN'
+      const matchesFilter =
+        poiFilter === 'all' || (poiFilter === 'major' ? isMajor : !isMajor)
+
+      return matchesKeyword && matchesFilter && !selectedPoiIds.includes(poi.id)
+    })
+  }, [pois, poiSearchKeyword, poiFilter, selectedPoiIds])
 
   const handleCheckboxChange = (poiId: string) => {
     setSelectedPoiIds((prev) =>
-      prev.includes(poiId)
-        ? prev.filter((id) => id !== poiId)
-        : [...prev, poiId]
+      prev.includes(poiId) ? prev.filter((id) => id !== poiId) : [...prev, poiId]
     )
   }
 
@@ -51,9 +63,7 @@ export function CreateTourForm({ onSuccess }: CreateTourFormProps) {
     setSelectedPoiIds((prev) => {
       const next = [...prev]
       const targetIndex = direction === 'up' ? index - 1 : index + 1
-
       if (targetIndex < 0 || targetIndex >= next.length) return prev
-
       ;[next[index], next[targetIndex]] = [next[targetIndex], next[index]]
       return next
     })
@@ -65,22 +75,28 @@ export function CreateTourForm({ onSuccess }: CreateTourFormProps) {
     setError('')
 
     const payload: Tour = {
-      id: '00000000-0000-0000-0000-000000000000',
+      id: (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()),
       name,
+      description,
+      durationMinutes,
+      createdAt: new Date().toISOString(),
       poiIds: selectedPoiIds,
     }
 
     try {
-    await tourApi.create(payload)
-    setName('')
-    setSelectedPoiIds([])
-    setPoiSearchKeyword('')
-    toastSuccess(`Created tour "${name}" successfully.`)
-    onSuccess?.()
+      await tourApi.create(payload)
+      setName('')
+      setDescription('')
+      setDurationMinutes(120)
+      setSelectedPoiIds([])
+      setPoiSearchKeyword('')
+      toastSuccess(`Đã tạo tour "${name}" thành công.`)
+      onSuccess?.()
     } catch (err) {
-    toastError(err instanceof Error ? err.message : 'Failed to create tour')
+      setError(err instanceof Error ? err.message : 'Không thể tạo tour')
+      toastError(err instanceof Error ? err.message : 'Không thể tạo tour')
     } finally {
-    setSubmitting(false)
+      setSubmitting(false)
     }
   }
 
@@ -89,111 +105,154 @@ export function CreateTourForm({ onSuccess }: CreateTourFormProps) {
     .filter(Boolean) as Poi[]
 
   return (
-    <form onSubmit={handleSubmit} className="app-form">
-      <h3 className="app-section-title">Create Tour</h3>
+    <form onSubmit={handleSubmit} className="form-grid">
+      <div className="form-column">
+        <label className="form-label">Tên tour</label>
+        <input
+          className="app-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ví dụ: Đêm Ẩm Thực Vĩnh Khánh"
+          required
+        />
 
-      <input
-        className="app-input"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Tour name"
-        required
-      />
+        <label className="form-label">Mô tả</label>
+        <textarea
+          className="app-input app-textarea"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Mô tả ngắn về hành trình này..."
+          rows={3}
+        />
 
-      <div>
-        <strong>Select POIs</strong>
+        <label className="form-label">Thời lượng (phút)</label>
+        <input
+          className="app-input"
+          type="number"
+          min={30}
+          max={600}
+          step={15}
+          value={durationMinutes}
+          onChange={(e) => setDurationMinutes(Number(e.target.value))}
+        />
 
-        <div style={{ marginTop: '12px', marginBottom: '12px' }}>
+        <p className="app-muted">
+          Tour cần tối thiểu 1 POI để lưu. Bạn có thể sắp xếp thứ tự bên phải.
+        </p>
+
+        <div className="poi-selector">
+          <div className="poi-selector-header">
+            <strong>Chọn POIs</strong>
+            <span className="app-muted">
+              {selectedPoiIds.length}/{pois.length}
+            </span>
+          </div>
+
           <input
             className="app-input"
             value={poiSearchKeyword}
             onChange={(e) => setPoiSearchKeyword(e.target.value)}
-            placeholder="Search POIs to add..."
+            placeholder="Tìm kiếm POIs..."
           />
-        </div>
 
-        {loadingPois ? (
-          <div>Loading POIs...</div>
-        ) : (
-          <div
-            style={{
-              display: 'grid',
-              gap: '8px',
-              maxHeight: '240px',
-              overflowY: 'auto',
-              border: '1px solid #444',
-              padding: '12px',
-              borderRadius: '8px',
-            }}
-          >
-            {filteredPois.map((poi) => (
-              <label
-                key={poi.id}
-                style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedPoiIds.includes(poi.id)}
-                  onChange={() => handleCheckboxChange(poi.id)}
-                />
-                <span>{poi.localizedData?.[0]?.name || poi.id}</span>
-              </label>
-            ))}
-
-            {filteredPois.length === 0 && (
-              <div className="app-muted">No POIs matched your search.</div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <strong>Selected POIs Order</strong>
-        <div style={{ display: 'grid', gap: '8px', marginTop: '12px' }}>
-          {selectedPois.length === 0 && <div>No POIs selected</div>}
-
-          {selectedPois.map((poi, index) => (
-            <div
-              key={poi.id}
-              className="app-card"
-              style={{
-                padding: '10px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: '12px',
-              }}
+          <div className="app-inline-actions" style={{ marginTop: 8 }}>
+            <button
+              className={`app-button ${poiFilter === 'all' ? 'primary' : ''}`}
+              type="button"
+              onClick={() => setPoiFilter('all')}
             >
-              <span>{poi.localizedData?.[0]?.name || poi.id}</span>
+              Tất cả
+            </button>
+            <button
+              className={`app-button ${poiFilter === 'major' ? 'primary' : ''}`}
+              type="button"
+              onClick={() => setPoiFilter('major')}
+            >
+              Điểm chính
+            </button>
+            <button
+              className={`app-button ${poiFilter === 'minor' ? 'primary' : ''}`}
+              type="button"
+              onClick={() => setPoiFilter('minor')}
+            >
+              Điểm phụ
+            </button>
+          </div>
 
-              <div className="app-inline-actions">
-                <button
-                  className="app-button"
-                  type="button"
-                  onClick={() => movePoi(index, 'up')}
-                  disabled={index === 0}
-                >
-                  Up
-                </button>
-                <button
-                  className="app-button"
-                  type="button"
-                  onClick={() => movePoi(index, 'down')}
-                  disabled={index === selectedPois.length - 1}
-                >
-                  Down
-                </button>
-              </div>
+          {loadingPois ? (
+            <div className="app-muted">Đang tải POIs...</div>
+          ) : (
+            <div className="poi-selector-list">
+              {filteredPois.map((poi) => (
+                <label key={poi.id} className="poi-selector-item">
+                  <input
+                    type="checkbox"
+                    checked={selectedPoiIds.includes(poi.id)}
+                    onChange={() => handleCheckboxChange(poi.id)}
+                  />
+                  <span>{poi.localizedData?.[0]?.name || poi.id}</span>
+                </label>
+              ))}
+
+              {filteredPois.length === 0 && (
+                <div className="app-muted">Không có POI phù hợp.</div>
+              )}
             </div>
-          ))}
+          )}
         </div>
       </div>
 
-      {error && <div style={{ color: 'tomato' }}>Error: {error}</div>}
+      <div className="form-column">
+        <div className="tour-order-card">
+          <h4>Thứ tự POIs trong tour</h4>
+          <div className="tour-order-list">
+            {selectedPois.length === 0 && (
+              <div className="app-muted">Chưa chọn POI nào.</div>
+            )}
 
-      <button className="app-button" type="submit" disabled={submitting}>
-        {submitting ? 'Creating...' : 'Submit'}
-      </button>
+            {selectedPois.map((poi, index) => (
+              <div key={poi.id} className="tour-order-item">
+                <span className="tour-order-index">{index + 1}</span>
+                <span>{poi.localizedData?.[0]?.name || poi.id}</span>
+                <div className="app-inline-actions">
+                  <button
+                    className="app-icon-button"
+                    type="button"
+                    onClick={() => movePoi(index, 'up')}
+                    disabled={index === 0}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 6l6 6H6l6-6z" fill="currentColor" />
+                    </svg>
+                  </button>
+                  <button
+                    className="app-icon-button"
+                    type="button"
+                    onClick={() => movePoi(index, 'down')}
+                    disabled={index === selectedPois.length - 1}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 18l-6-6h12l-6 6z" fill="currentColor" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {error && <div className="form-error">Lỗi: {error}</div>}
+
+        <div className="form-actions">
+          <button
+            className="app-button primary"
+            type="submit"
+            disabled={submitting || selectedPoiIds.length === 0 || !name.trim()}
+          >
+            {submitting ? 'Đang tạo...' : 'Lưu tour'}
+          </button>
+        </div>
+      </div>
     </form>
   )
 }

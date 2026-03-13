@@ -6,8 +6,7 @@ import type { Poi } from '@/entities/poi/model/types'
 import { CreateTourForm } from '@/features/tour/create-tour/CreateTourForm'
 import { DeleteTourButton } from '@/features/tour/delete-tour/DeleteTourButton'
 import { EditTourForm } from '@/features/tour/edit-tour/EditTourForm'
-
-type TourFilter = 'all' | 'single-poi' | 'multi-poi'
+import { EmptyState, Modal } from '@/shared/ui'
 
 export function TourManagementPage() {
   const [tours, setTours] = useState<Tour[]>([])
@@ -15,9 +14,8 @@ export function TourManagementPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [editingTourId, setEditingTourId] = useState<string | null>(null)
+  const [editingTour, setEditingTour] = useState<Tour | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
-  const [tourFilter, setTourFilter] = useState<TourFilter>('all')
 
   const loadTours = async () => {
     const res = await tourApi.getAll()
@@ -35,7 +33,7 @@ export function TourManagementPage() {
       setError('')
       await Promise.all([loadTours(), loadPois()])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load tours')
+      setError(err instanceof Error ? err.message : 'Không thể tải tour')
     } finally {
       setLoading(false)
     }
@@ -45,11 +43,11 @@ export function TourManagementPage() {
     loadData()
   }, [])
 
-  const poiNameMap = useMemo(() => {
-    return new Map(
-      pois.map((poi) => [poi.id, poi.localizedData?.[0]?.name || poi.id])
-    )
-  }, [pois])
+  const poiNameMap = useMemo(
+    () =>
+      new Map(pois.map((poi) => [poi.id, poi.localizedData?.[0]?.name || poi.id])),
+    [pois]
+  )
 
   const filteredTours = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase()
@@ -58,168 +56,168 @@ export function TourManagementPage() {
       const matchesKeyword =
         !keyword ||
         tour.name.toLowerCase().includes(keyword) ||
+        (tour.description || '').toLowerCase().includes(keyword) ||
         tour.poiIds.some((poiId) =>
           (poiNameMap.get(poiId) || '').toLowerCase().includes(keyword)
         )
 
-      const matchesFilter =
-        tourFilter === 'all' ||
-        (tourFilter === 'single-poi' && tour.poiIds.length === 1) ||
-        (tourFilter === 'multi-poi' && tour.poiIds.length > 1)
-
-      return matchesKeyword && matchesFilter
+      return matchesKeyword
     })
-  }, [tours, searchKeyword, tourFilter, poiNameMap])
-
-  if (loading) return <div>Loading Tours...</div>
-  if (error) return <div>Error: {error}</div>
+  }, [tours, searchKeyword, poiNameMap])
 
   return (
-    <div>
-      <div className="app-toolbar">
+    <div className="app-page">
+      <div className="page-header page-header-actions">
         <div>
-          <h1 className="app-page-title">Tour Management</h1>
-          <p className="app-page-subtitle">
-            Total Tours: {filteredTours.length} / {tours.length}
+          <h1 className="page-title">Tours Management</h1>
+          <p className="page-subtitle">
+            Thiết kế và quản lý các hành trình khám phá ẩm thực
           </p>
         </div>
 
-        <div className="app-toolbar-actions">
-          <button className="app-button" onClick={loadData}>
-            Refresh
-          </button>
-          <button
-            className="app-button"
-            onClick={() => setShowCreateForm((prev) => !prev)}
-          >
-            {showCreateForm ? 'Close Create Form' : 'Create Tour'}
-          </button>
-        </div>
+        <button
+          className="app-button primary"
+          type="button"
+          onClick={() => setShowCreateForm(true)}
+        >
+          + Tạo Tour mới
+        </button>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gap: '12px',
-          marginBottom: '20px',
-          maxWidth: '520px',
-        }}
-      >
-        <label style={{ display: 'grid', gap: '6px' }}>
-          <span className="app-muted">Search tours</span>
-          <input
-            className="app-input"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-            placeholder="Search tours by name or POI name..."
-          />
-        </label>
-
-        <label style={{ display: 'grid', gap: '6px' }}>
-          <span className="app-muted">Filter tours</span>
-          <select
-            className="app-input"
-            value={tourFilter}
-            onChange={(e) => {
-              const value = e.target.value as TourFilter
-              setTourFilter(value)
-            }}
-          >
-            <option value="all">All Tours</option>
-            <option value="single-poi">Only 1 POI</option>
-            <option value="multi-poi">More than 1 POI</option>
-          </select>
-        </label>
+      <div className="tour-toolbar">
+        <input
+          className="app-input"
+          value={searchKeyword}
+          onChange={(e) => setSearchKeyword(e.target.value)}
+          placeholder="Tìm kiếm theo tên tour hoặc POI..."
+        />
       </div>
 
-      {showCreateForm && (
-        <div style={{ marginBottom: '24px' }}>
-          <CreateTourForm
-            onSuccess={() => {
-              setShowCreateForm(false)
-              loadData()
-            }}
-          />
-        </div>
-      )}
+      {loading ? <div className="app-muted">Đang tải Tours...</div> : null}
+      {error ? <div className="app-alert app-alert-danger">Lỗi: {error}</div> : null}
 
-      {filteredTours.length === 0 ? (
-        <div className="app-card">
-          <h3 style={{ marginTop: 0 }}>No tours found</h3>
-          <p className="app-muted" style={{ marginBottom: 0 }}>
-            Try changing the keyword/filter or create a new tour.
-          </p>
-        </div>
+      {!loading && filteredTours.length === 0 ? (
+        <EmptyState
+          title="Chưa có Tour nào"
+          description="Hãy tạo tour mới hoặc điều chỉnh từ khoá tìm kiếm."
+          actionLabel="Tạo Tour mới"
+          onAction={() => setShowCreateForm(true)}
+        />
       ) : (
-        <div className="app-grid">
+        <div className="tour-grid">
           {filteredTours.map((tour) => {
-            const isEditing = editingTourId === tour.id
-
+            const poiCount = tour.poiIds.length
+            const durationLabel = formatDuration(tour, poiCount)
+            const description =
+              tour.description && tour.description.trim().length > 0
+                ? tour.description
+                : getTourDescription(tour.name)
+            const createdLabel = tour.createdAt
+              ? new Date(tour.createdAt).toLocaleDateString('vi-VN')
+              : 'Chưa có ngày tạo'
             return (
-              <div key={tour.id} className="app-card">
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: '16px',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '28px' }}>{tour.name}</h3>
-                    <div style={{ marginTop: '10px' }}>
-                      <span className="app-chip">
-                        POIs in Tour: {tour.poiIds.length}
-                      </span>
+              <article key={tour.id} className="tour-card">
+                <div className="tour-card-icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M4 6a2 2 0 012-2h9a2 2 0 012 2v2h3a2 2 0 012 2v7a3 3 0 01-3 3H6a2 2 0 01-2-2V6zm12 4V6H6v12h12a1 1 0 001-1v-6h-3zm-8 2h6v2H8v-2z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </div>
+                <div className="tour-card-body">
+                  <div className="tour-card-header">
+                    <h3>{tour.name}</h3>
+                    <div className="tour-card-actions">
+                      <button
+                        className="app-icon-button"
+                        type="button"
+                        onClick={() => setEditingTour(tour)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l8.06-8.06.92.92L5.92 20.08zM20.71 7.04a1 1 0 000-1.42l-2.34-2.34a1 1 0 00-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </button>
+                      <DeleteTourButton
+                        tourId={tour.id}
+                        tourName={tour.name}
+                        onDeleted={loadData}
+                        variant="icon"
+                      />
                     </div>
                   </div>
-
-                  <div className="app-inline-actions">
-                    <button
-                      className="app-button"
-                      onClick={() =>
-                        setEditingTourId((prev) =>
-                          prev === tour.id ? null : tour.id
-                        )
-                      }
-                    >
-                      {isEditing ? 'Close Edit' : 'Edit'}
-                    </button>
-
-                    <DeleteTourButton
-                      tourId={tour.id}
-                      tourName={tour.name}
-                      onDeleted={loadData}
-                    />
+                  <p className="tour-card-desc">{description}</p>
+                  <div className="tour-card-meta">
+                    <span>{poiCount} địa điểm</span>
+                    <span>{durationLabel}</span>
+                    <span>{createdLabel}</span>
                   </div>
                 </div>
-
-                <div style={{ marginTop: '16px' }}>
-                  <strong>POI Order</strong>
-                  <ol style={{ marginTop: '10px', paddingLeft: '20px' }}>
-                    {tour.poiIds.map((poiId) => (
-                      <li key={poiId} style={{ marginBottom: '6px' }}>
-                        {poiNameMap.get(poiId) || poiId}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-
-                {isEditing && (
-                  <EditTourForm
-                    tour={tour}
-                    onSuccess={() => {
-                      setEditingTourId(null)
-                      loadData()
-                    }}
-                    onCancel={() => setEditingTourId(null)}
-                  />
-                )}
-              </div>
+              </article>
             )
           })}
         </div>
       )}
+
+      <Modal
+        open={showCreateForm}
+        title="Tạo Tour mới"
+        size="lg"
+        onClose={() => setShowCreateForm(false)}
+      >
+        <CreateTourForm
+          onSuccess={() => {
+            setShowCreateForm(false)
+            loadData()
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={Boolean(editingTour)}
+        title="Chỉnh sửa Tour"
+        size="lg"
+        onClose={() => setEditingTour(null)}
+      >
+        {editingTour ? (
+          <EditTourForm
+            tour={editingTour}
+            onSuccess={() => {
+              setEditingTour(null)
+              loadData()
+            }}
+            onCancel={() => setEditingTour(null)}
+          />
+        ) : null}
+      </Modal>
     </div>
   )
+}
+
+const getDurationLabel = (count: number) => {
+  if (count <= 1) return '1-2 giờ'
+  if (count <= 3) return '2-3 giờ'
+  return '3-4 giờ'
+}
+
+const getTourDescription = (name: string) => {
+  const lowerName = name.toLowerCase()
+  if (lowerName.includes('hải sản')) {
+    return 'Tập trung vào các quán hải sản nổi tiếng.'
+  }
+  if (lowerName.includes('đêm') || lowerName.includes('ẩm thực')) {
+    return 'Hành trình khám phá những món ăn đặc trưng của phố ẩm thực.'
+  }
+  return 'Hành trình khám phá ẩm thực đường phố Vĩnh Khánh.'
+}
+
+const formatDuration = (tour: Tour, poiCount: number) => {
+  if (tour.durationMinutes && tour.durationMinutes > 0) {
+    const hours = (tour.durationMinutes / 60).toFixed(1)
+    return `${hours} giờ`
+  }
+  return getDurationLabel(poiCount)
 }

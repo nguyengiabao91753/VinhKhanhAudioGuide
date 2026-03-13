@@ -40,15 +40,19 @@ public class POIService : IPOIService
             await _db.pois.AddAsync(poi);
 
             await _db.SaveChangesAsync();
-            _db.tour_points.Add(new tour_points
+            if (tourId != Guid.Empty)
             {
-                tour_point_id = poi._id,
-                id_tour = tourId,
-                order = poiDto.Order
-            });
+                _db.tour_points.Add(new tour_points
+                {
+                    tour_point_id = poi._id,
+                    id_tour = tourId,
+                    order = poiDto.Order
+                });
 
-            await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync();
+            }
 
+            poiDto.Id = poi._id;
             return poiDto;
         }
         catch (Exception ex)

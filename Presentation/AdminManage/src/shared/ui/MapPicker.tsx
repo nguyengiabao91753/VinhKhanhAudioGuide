@@ -9,7 +9,9 @@ type MapPickerProps = {
   height?: number
 }
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string
+const MAPBOX_TOKEN =
+  (import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string) ||
+  (import.meta.env.VITE_MAPBOX_TOKEN as string)
 
 export function MapPicker({
   lat,

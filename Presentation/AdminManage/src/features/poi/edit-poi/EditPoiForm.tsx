@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { poiApi } from '@/entities/poi/api/poiApi'
-import type { Poi } from '@/entities/poi/model/types'
+import type { Poi, PoiFormPayload } from '@/entities/poi/model/types'
 import { toastError, toastSuccess } from '@/shared/ui'
 import { MapPicker } from '@/shared/ui/MapPicker'
 
@@ -9,6 +9,13 @@ type EditPoiFormProps = {
   onSuccess?: () => void
   onCancel?: () => void
 }
+
+const isCategoryValue = (value?: string) =>
+  value === 'MAIN' ||
+  value === 'WC' ||
+  value === 'TICKET' ||
+  value === 'PARKING' ||
+  value === 'BOAT'
 
 export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
   const [submitting, setSubmitting] = useState(false)
@@ -19,11 +26,16 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
     poi.localizedData[0]
 
   const [name, setName] = useState(viData?.name || '')
+  const [description, setDescription] = useState(viData?.description || '')
+  const [address, setAddress] = useState(viData?.descriptionText || '')
+  const [category, setCategory] = useState(
+    isCategoryValue(viData?.descriptionAudio) ? viData?.descriptionAudio || 'MAIN' : 'MAIN'
+  )
   const [range, setRange] = useState(poi.range)
   const [lat, setLat] = useState(poi.position.lat)
   const [lng, setLng] = useState(poi.position.lng)
-  const [thumbnail, setThumbnail] = useState(poi.thumbnail)
-  const [banner, setBanner] = useState(poi.banner)
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null)
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,11 +43,9 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
     setSubmitting(true)
     setError('')
 
-    const payload: Poi = {
-      ...poi,
+    const payload: PoiFormPayload = {
+      order: poi.order,
       range,
-      thumbnail,
-      banner,
       position: {
         ...poi.position,
         lat,
@@ -44,24 +54,21 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
       localizedData: poi.localizedData.map((item) => ({
         ...item,
         name,
-        description:
-          item.langCode === 'vi'
-            ? `Mô tả cập nhật cho ${name}`
-            : `Updated description for ${name}`,
-        descriptionText:
-          item.langCode === 'vi'
-            ? `Bài thuyết minh cập nhật cho ${name}`
-            : `Updated narration for ${name}`,
+        description,
+        descriptionText: address,
+        descriptionAudio: category,
       })),
+      thumbnailFile,
+      bannerFile,
     }
 
     try {
       await poiApi.update(poi.id, payload)
-      toastSuccess(`Updated POI "${name}" successfully.`)
+      toastSuccess(`Đã cập nhật POI "${name}" thành công.`)
       onSuccess?.()
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Failed to update POI'
+        err instanceof Error ? err.message : 'Không thể cập nhật POI'
       setError(message)
       toastError(message)
     } finally {
@@ -70,86 +77,142 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="app-form">
-      <h4 className="app-section-title">Edit POI</h4>
-
-      <input
-        className="app-input"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="POI name"
-        required
-      />
-
-      <input
-        className="app-input"
-        type="number"
-        value={range}
-        onChange={(e) => setRange(Number(e.target.value))}
-        placeholder="Range"
-      />
-
-      <div style={{ display: 'grid', gap: '12px' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '12px',
-          }}
-        >
-          <input
-            className="app-input"
-            type="number"
-            step="0.000001"
-            value={lat}
-            onChange={(e) => setLat(Number(e.target.value))}
-            placeholder="Latitude"
-            required
-          />
-
-          <input
-            className="app-input"
-            type="number"
-            step="0.000001"
-            value={lng}
-            onChange={(e) => setLng(Number(e.target.value))}
-            placeholder="Longitude"
-            required
-          />
-        </div>
-
-        <MapPicker
-          lat={lat}
-          lng={lng}
-          onChange={({ lat, lng }) => {
-            setLat(lat)
-            setLng(lng)
-          }}
+    <form onSubmit={handleSubmit} className="form-grid">
+      <div className="form-column">
+        <label className="form-label">Tên POI</label>
+        <input
+          className="app-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ví dụ: Ốc Oanh"
+          required
         />
+
+        <label className="form-label">Danh mục</label>
+        <select
+          className="app-input"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          <option value="MAIN">Điểm chính (MAIN)</option>
+          <option value="WC">WC</option>
+          <option value="TICKET">Bán vé (TICKET)</option>
+          <option value="PARKING">Gửi xe (PARKING)</option>
+          <option value="BOAT">Bến thuyền (BOAT)</option>
+        </select>
+
+        <label className="form-label">Mô tả ngắn</label>
+        <textarea
+          className="app-input app-textarea"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Nhập mô tả ngắn về địa điểm..."
+          rows={4}
+        />
+
+        <label className="form-label">Địa chỉ</label>
+        <input
+          className="app-input"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder="212 Vĩnh Khánh, Quận 4"
+        />
+
+        <label className="form-label">Bán kính (m)</label>
+        <input
+          className="app-input"
+          type="number"
+          value={range}
+          onChange={(e) => setRange(Number(e.target.value))}
+          placeholder="Range"
+        />
+
+        <div className="form-row">
+          <div>
+            <label className="form-label">Latitude</label>
+            <input
+              className="app-input"
+              type="number"
+              step="0.000001"
+              value={lat}
+              onChange={(e) => setLat(Number(e.target.value))}
+              placeholder="Latitude"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Longitude</label>
+            <input
+              className="app-input"
+              type="number"
+              step="0.000001"
+              value={lng}
+              onChange={(e) => setLng(Number(e.target.value))}
+              placeholder="Longitude"
+              required
+            />
+          </div>
+        </div>
       </div>
 
-      <input
-        className="app-input"
-        value={thumbnail}
-        onChange={(e) => setThumbnail(e.target.value)}
-        placeholder="Thumbnail"
-      />
+      <div className="form-column">
+        <div className="map-panel">
+          <div className="map-panel-header">
+            <span>Vị trí trên bản đồ</span>
+            <span className="map-coordinates">
+              LAT: {lat.toFixed(4)} · LNG: {lng.toFixed(4)}
+            </span>
+          </div>
+          <MapPicker
+            lat={lat}
+            lng={lng}
+            height={260}
+            onChange={({ lat, lng }) => {
+              setLat(lat)
+              setLng(lng)
+            }}
+          />
+          <p className="map-hint">
+            * Click trực tiếp lên bản đồ để cập nhật vị trí chính xác.
+          </p>
+        </div>
 
-      <input
-        className="app-input"
-        value={banner}
-        onChange={(e) => setBanner(e.target.value)}
-        placeholder="Banner"
-      />
+        <div className="upload-panel">
+          <div>
+            <label className="form-label">Ảnh thumbnail</label>
+            <input
+              className="app-input"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setThumbnailFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
 
-      {error && <div style={{ color: 'tomato' }}>Error: {error}</div>}
+          <div>
+            <label className="form-label">Ảnh banner</label>
+            <input
+              className="app-input"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setBannerFile(e.target.files?.[0] ?? null)}
+            />
+          </div>
+        </div>
+      </div>
 
-      <div className="app-inline-actions">
-        <button className="app-button" type="submit" disabled={submitting}>
-          {submitting ? 'Saving...' : 'Save'}
+      {error && <div className="form-error">Lỗi: {error}</div>}
+
+      <div className="form-actions">
+        <button
+          className="app-button primary"
+          type="submit"
+          disabled={submitting || !name.trim() || lat === 0 || lng === 0}
+        >
+          {submitting ? 'Đang lưu...' : 'Lưu POI'}
         </button>
         <button className="app-button" type="button" onClick={onCancel}>
-          Cancel
+          Hủy
         </button>
       </div>
     </form>

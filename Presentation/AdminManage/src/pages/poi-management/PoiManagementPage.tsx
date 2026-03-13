@@ -4,14 +4,38 @@ import type { Poi } from '@/entities/poi/model/types'
 import { CreatePoiForm } from '@/features/poi/create-poi/CreatePoiForm'
 import { DeletePoiButton } from '@/features/poi/delete-poi/DeletePoiButton'
 import { EditPoiForm } from '@/features/poi/edit-poi/EditPoiForm'
+import { EmptyState, Modal } from '@/shared/ui'
+
+type CategoryFilter = 'all' | 'MAIN' | 'WC' | 'TICKET' | 'PARKING' | 'BOAT'
+
+const categoryLabelMap: Record<CategoryFilter, string> = {
+  all: 'Tất cả',
+  MAIN: 'Điểm chính',
+  WC: 'WC',
+  TICKET: 'Bán vé',
+  PARKING: 'Gửi xe',
+  BOAT: 'Bến thuyền',
+}
+
+const getPoiCategory = (poi: Poi): CategoryFilter => {
+  const viData =
+    poi.localizedData.find((item) => item.langCode === 'vi') ??
+    poi.localizedData[0]
+  const raw = viData?.descriptionAudio
+  if (raw === 'MAIN' || raw === 'WC' || raw === 'TICKET' || raw === 'PARKING' || raw === 'BOAT') {
+    return raw
+  }
+  return 'MAIN'
+}
 
 export function PoiManagementPage() {
   const [pois, setPois] = useState<Poi[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [editingPoiId, setEditingPoiId] = useState<string | null>(null)
+  const [editingPoi, setEditingPoi] = useState<Poi | null>(null)
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all')
 
   const loadPois = async () => {
     try {
@@ -20,7 +44,7 @@ export function PoiManagementPage() {
       const res = await poiApi.getAll()
       setPois(res.data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load POIs')
+      setError(err instanceof Error ? err.message : 'Không thể tải danh sách POIs')
     } finally {
       setLoading(false)
     }
@@ -32,128 +56,183 @@ export function PoiManagementPage() {
 
   const filteredPois = useMemo(() => {
     const keyword = searchKeyword.trim().toLowerCase()
-    if (!keyword) return pois
 
     return pois.filter((poi) => {
       const names = poi.localizedData.map((item) => item.name.toLowerCase())
       const descriptions = poi.localizedData.map((item) =>
         item.description.toLowerCase()
       )
-
-      return (
+      const addresses = poi.localizedData.map((item) =>
+        (item.descriptionText || '').toLowerCase()
+      )
+      const matchesKeyword =
+        !keyword ||
         names.some((name) => name.includes(keyword)) ||
         descriptions.some((desc) => desc.includes(keyword)) ||
-        poi.thumbnail.toLowerCase().includes(keyword) ||
-        poi.banner.toLowerCase().includes(keyword)
-      )
-    })
-  }, [pois, searchKeyword])
+        addresses.some((addr) => addr.includes(keyword))
 
-  if (loading) return <div>Loading POIs...</div>
-  if (error) return <div>Error: {error}</div>
+      const matchesCategory =
+        categoryFilter === 'all' || getPoiCategory(poi) === categoryFilter
+
+      return matchesKeyword && matchesCategory
+    })
+  }, [pois, searchKeyword, categoryFilter])
+
+  const poiCountLabel = `${filteredPois.length} / ${pois.length}`
 
   return (
-    <div>
-      <div className="app-toolbar">
+    <div className="app-page">
+      <div className="page-header page-header-actions">
         <div>
-          <h1 className="app-page-title">POI Management</h1>
-          <p className="app-page-subtitle">
-            Total POIs: {filteredPois.length} / {pois.length}
+          <h1 className="page-title">Points of Interest</h1>
+          <p className="page-subtitle">
+            Quản lý các địa điểm ẩm thực trên phố Vĩnh Khánh
           </p>
         </div>
 
-        <div className="app-toolbar-actions">
-          <button className="app-button" onClick={loadPois}>
-            Refresh
-          </button>
-          <button
-            className="app-button"
-            onClick={() => setShowCreateForm((prev) => !prev)}
-          >
-            {showCreateForm ? 'Close Create Form' : 'Create POI'}
-          </button>
-        </div>
+        <button
+          className="app-button primary"
+          type="button"
+          onClick={() => setShowCreateForm(true)}
+        >
+          + Thêm POI mới
+        </button>
       </div>
 
-      <div style={{ marginBottom: '20px', maxWidth: '420px' }}>
-        <input
-          className="app-input"
-          value={searchKeyword}
-          onChange={(e) => setSearchKeyword(e.target.value)}
-          placeholder="Search POI by name or description..."
-        />
-      </div>
-
-      {showCreateForm && (
-        <div style={{ marginBottom: '24px' }}>
-          <CreatePoiForm
-            onSuccess={() => {
-              setShowCreateForm(false)
-              loadPois()
-            }}
+      <div className="poi-toolbar">
+        <div className="poi-search">
+          <input
+            className="app-input"
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            placeholder="Tìm kiếm theo tên hoặc địa chỉ..."
           />
         </div>
-      )}
+        <div className="poi-filter">
+          <div className="poi-filter-select">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M3 5h18l-7 8v6l-4 2v-8L3 5z"
+                fill="currentColor"
+              />
+            </svg>
+            <select
+              className="app-input"
+              value={categoryFilter}
+              onChange={(e) =>
+                setCategoryFilter(e.target.value as CategoryFilter)
+              }
+            >
+              {Object.entries(categoryLabelMap).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <span className="poi-filter-count">{poiCountLabel}</span>
+        </div>
+      </div>
 
-      <div className="app-grid">
-        {filteredPois.map((poi) => {
-          const isEditing = editingPoiId === poi.id
-          const poiName = poi.localizedData?.[0]?.name || poi.id
+      {loading ? <div className="app-muted">Đang tải POIs...</div> : null}
+      {error ? <div className="app-alert app-alert-danger">Lỗi: {error}</div> : null}
 
-          return (
-            <div key={poi.id} className="app-card">
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: '16px',
-                  alignItems: 'flex-start',
-                }}
-              >
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '28px' }}>{poiName}</h3>
-                  <div className="app-list" style={{ marginTop: '10px' }}>
-                    <div>
-                      <span className="app-chip">Range: {poi.range}</span>
-                    </div>
-                    <div className="app-muted">
-                      Position: {poi.position.lat}, {poi.position.lng}
+      {!loading && filteredPois.length === 0 ? (
+        <EmptyState
+          title="Chưa có POI nào"
+          description="Hãy tạo POI mới hoặc điều chỉnh bộ lọc để xem dữ liệu."
+          actionLabel="Tạo POI mới"
+          onAction={() => setShowCreateForm(true)}
+        />
+      ) : (
+        <div className="poi-grid">
+          {filteredPois.map((poi) => {
+            const viData =
+              poi.localizedData.find((item) => item.langCode === 'vi') ??
+              poi.localizedData[0]
+            const poiName = viData?.name || poi.id
+            const description = viData?.description || 'Chưa có mô tả'
+            const address = viData?.descriptionText || 'Chưa cập nhật địa chỉ'
+            const category = getPoiCategory(poi)
+            const cover = poi.banner || poi.thumbnail || ''
+
+            return (
+              <article key={poi.id} className="poi-card">
+                <div
+                  className="poi-card-cover"
+                  style={{
+                    backgroundImage: cover ? `url(${cover})` : undefined,
+                  }}
+                >
+                  <span className="poi-card-chip">{categoryLabelMap[category]}</span>
+                </div>
+                <div className="poi-card-body">
+                  <h3 className="poi-card-title">{poiName}</h3>
+                  <p className="poi-card-desc">{description}</p>
+                  <div className="poi-card-meta">
+                    <div className="poi-card-address">{address}</div>
+                    <div className="poi-card-coordinates">
+                      {poi.position.lat.toFixed(4)}, {poi.position.lng.toFixed(4)}
                     </div>
                   </div>
                 </div>
-
-                <div className="app-inline-actions">
+                <div className="poi-card-actions">
                   <button
-                    className="app-button"
-                    onClick={() =>
-                      setEditingPoiId((prev) => (prev === poi.id ? null : poi.id))
-                    }
+                    className="app-icon-button"
+                    type="button"
+                    onClick={() => setEditingPoi(poi)}
                   >
-                    {isEditing ? 'Close Edit' : 'Edit'}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l8.06-8.06.92.92L5.92 20.08zM20.71 7.04a1 1 0 000-1.42l-2.34-2.34a1 1 0 00-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"
+                        fill="currentColor"
+                      />
+                    </svg>
                   </button>
-
                   <DeletePoiButton
                     poiId={poi.id}
                     poiName={poiName}
                     onDeleted={loadPois}
+                    variant="icon"
                   />
                 </div>
-              </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
 
-              {isEditing && (
-                <EditPoiForm
-                  poi={poi}
-                  onSuccess={() => {
-                    setEditingPoiId(null)
-                    loadPois()
-                  }}
-                  onCancel={() => setEditingPoiId(null)}
-                />
-              )}
-            </div>
-          )
-        })}
-      </div>
+      <Modal
+        open={showCreateForm}
+        title="Thêm POI mới"
+        size="lg"
+        onClose={() => setShowCreateForm(false)}
+      >
+        <CreatePoiForm
+          onSuccess={() => {
+            setShowCreateForm(false)
+            loadPois()
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={Boolean(editingPoi)}
+        title="Chỉnh sửa POI"
+        size="lg"
+        onClose={() => setEditingPoi(null)}
+      >
+        {editingPoi ? (
+          <EditPoiForm
+            poi={editingPoi}
+            onSuccess={() => {
+              setEditingPoi(null)
+              loadPois()
+            }}
+            onCancel={() => setEditingPoi(null)}
+          />
+        ) : null}
+      </Modal>
     </div>
   )
 }
