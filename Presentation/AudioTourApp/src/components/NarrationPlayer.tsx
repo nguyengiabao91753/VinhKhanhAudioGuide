@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { NarrationService } from "./../features/narration/NarrationService";
+import { NarrationService } from "../features/narration";
 
 interface AudioPlayerProps {
   className?: string;

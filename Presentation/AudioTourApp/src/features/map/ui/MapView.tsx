@@ -1,9 +1,54 @@
-import { useEffect, useRef } from "react";
-import "mapbox-gl/dist/mapbox-gl.css";
-import type { PoiDto } from "../../../entities/poi";
-import type { Location } from "../../location";
-import { mapboxgl } from "../lib/mapboxSetup";
-import styles from "./MapView.module.css";
+import { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import type { PoiDto } from '../../../entities/poi';
+import type { Location } from '../../location';
+import styles from './MapView.module.css';
+
+delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: string })._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+const userIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const poiIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const activePoiIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+function MapUpdater({ location }: { location: Location | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (location) {
+      map.setView([location.latitude, location.longitude], map.getZoom());
+    }
+  }, [location, map]);
+  return null;
+}
 
 interface MapViewProps {
   pois: PoiDto[];
@@ -20,68 +65,54 @@ export function MapView({
   onMarkerClick,
   currentLanguage,
 }: MapViewProps) {
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const mapInstance = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const defaultCenter = userLocation
+    ? [userLocation.latitude, userLocation.longitude]
+    : pois[0]
+      ? [pois[0].position.lat, pois[0].position.lng]
+      : [10.7578, 106.7042];
 
-  // init map
-  useEffect(() => {
-    if (!mapRef.current) return;
+  return (
+    <div className={styles.mapContainer}>
+      <MapContainer
+        center={defaultCenter as [number, number]}
+        zoom={16}
+        className="w-full h-full"
+        zoomControl={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
 
-    mapInstance.current = new mapboxgl.Map({
-      container: mapRef.current,
-      style: "mapbox://styles/mapbox/streets-v12",
-      center: userLocation
-        ? [userLocation.longitude, userLocation.latitude]
-        : pois[0]
-        ? [pois[0].position.lng, pois[0].position.lat]
-        : [106.7042, 10.7578],
-      zoom: 16,
-    });
+        {userLocation && (
+          <>
+            <MapUpdater location={userLocation} />
+            <Marker position={[userLocation.latitude, userLocation.longitude]} icon={userIcon}>
+              <Popup>{currentLanguage === 'vi' ? 'Bạn đang ở đây' : 'You are here'}</Popup>
+            </Marker>
+          </>
+        )}
 
-    return () => {
-      mapInstance.current?.remove();
-    };
-  }, []);
-
-  // update markers
-  useEffect(() => {
-    const map = mapInstance.current;
-    if (!map) return;
-
-    // user marker
-    if (userLocation) {
-      let userMarker = markersRef.current.get("user");
-
-      if (!userMarker) {
-        userMarker = new mapboxgl.Marker({ color: "#3b82f6" })
-          .setLngLat([userLocation.longitude, userLocation.latitude])
-          .addTo(map);
-
-        markersRef.current.set("user", userMarker);
-      } else {
-        userMarker.setLngLat([userLocation.longitude, userLocation.latitude]);
-      }
-    }
-
-    // poi markers
-    pois.forEach((poi) => {
-      let marker = markersRef.current.get(poi.id);
-
-      if (!marker) {
-        marker = new mapboxgl.Marker({
-          color: activePoi?.id === poi.id ? "#ef4444" : "#f59e0b",
-        })
-          .setLngLat([poi.position.lng, poi.position.lat])
-          .addTo(map);
-
-        marker.getElement().addEventListener("click", () => onMarkerClick(poi));
-        markersRef.current.set(poi.id, marker);
-      } else {
-        marker.setLngLat([poi.position.lng, poi.position.lat]);
-      }
-    });
-  }, [pois, userLocation, activePoi, currentLanguage]);
-
-  return <div ref={mapRef} className={styles.mapContainer} />;
+        {pois.map((poi) => {
+          const isActive = activePoi?.id === poi.id;
+          const localized = poi.localizedData?.find(l => l.langCode === currentLanguage) ?? poi.localizedData?.[0];
+          return (
+            <Marker
+              key={poi.id}
+              position={[poi.position.lat, poi.position.lng]}
+              icon={isActive ? activePoiIcon : poiIcon}
+              eventHandlers={{ click: () => onMarkerClick(poi) }}
+            >
+              <Popup>
+                <div className="min-w-[140px]">
+                  <div className="font-semibold">{localized?.name || 'POI'}</div>
+                  <div className="text-xs text-gray-500">{localized?.description || localized?.descriptionText || ''}</div>
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+      </MapContainer>
+    </div>
+  );
 }

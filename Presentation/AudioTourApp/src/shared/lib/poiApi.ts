@@ -3,7 +3,7 @@ import { apiGet } from './apiClient';
 
 export async function fetchPois(): Promise<PoiDto[]> {
   try {
-    return await apiGet<PoiDto[]>('/pois/get-all');
+    return await apiGet<PoiDto[]>('/pois');
   } catch (err) {
     console.log('Using mock data (API unavailable).', err);
     return getMockPois();

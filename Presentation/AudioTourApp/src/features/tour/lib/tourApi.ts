@@ -3,7 +3,14 @@ import { apiGet } from '../../../shared/lib/apiClient';
 
 export async function fetchTours(): Promise<TourDto[]> {
   try {
-    return await apiGet<TourDto[]>('/tours/get-all');
+    const res = await apiGet<unknown>('/tours');
+    if (Array.isArray(res)) {
+      return res as TourDto[];
+    }
+    if (res && typeof res === 'object' && 'data' in res) {
+      return (res as { data: TourDto[] }).data;
+    }
+    return [];
   } catch (err) {
     console.log('Tours API unavailable, using mock data.', err);
     return getMockTours();
@@ -12,8 +19,12 @@ export async function fetchTours(): Promise<TourDto[]> {
 
 export async function fetchTourById(tourId: string): Promise<TourDto | null> {
   try {
-    const tours = await fetchTours();
-    return tours.find(t => t.id === tourId) || null;
+    if (!tourId) return null;
+    const res = await apiGet<unknown>(`/tours/${tourId}`);
+    if (res && typeof res === 'object' && 'data' in res) {
+      return (res as { data: TourDto }).data ?? null;
+    }
+    return (res as TourDto) ?? null;
   } catch (err) {
     console.error('Failed to fetch tour:', err);
     return null;

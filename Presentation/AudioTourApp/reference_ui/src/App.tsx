@@ -1,83 +1,30 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { useState, useEffect, useRef, useCallback } from 'react';
-import MapView from '../components/MapView';
-import BottomPanel from '../components/BottomPanel';
-import MenuOverlay from '../components/MenuOverlay';
-import { calculateDistance } from '../utils/geo';
-import { playNarration, stopNarration } from '../engines/NarrationEngine';
-import type { POI, Tour } from '../types';
+import MapView from './components/MapView';
+import BottomPanel from './components/BottomPanel';
+import MenuOverlay from './components/MenuOverlay';
+import { calculateDistance, generateMockPOIs, generateMockTours } from './utils/geo';
+import { playNarration, stopNarration } from './engines/NarrationEngine';
+import { POI, Tour } from './types';
 import { Menu } from 'lucide-react';
-import { fetchTours } from '../features/tour';
-import { fetchPois } from '../shared/lib';
-import type { LocalizedData, PoiDto } from '../entities/poi';
-import type { TourDto } from '../entities/tour';
-
-type SupportedLanguage = 'vi' | 'en';
-
-const FAVORITES_KEY = 'autonarration_favorites';
-const OFFLINE_POIS_KEY = 'autonarration_offline_pois';
-
-function pickLocalized(list: LocalizedData[] | undefined, lang: SupportedLanguage) {
-  if (!list || list.length === 0) return undefined;
-  return list.find(l => l.langCode === lang) ?? list[0];
-}
-
-function resolveLocalized(
-  list: LocalizedData[] | undefined,
-  fallback: { name?: string; description?: string }
-) {
-  const vi = pickLocalized(list, 'vi');
-  const en = pickLocalized(list, 'en');
-  const name = {
-    vi: vi?.name || fallback.name || '',
-    en: en?.name || fallback.name || ''
-  };
-  const description = {
-    vi: vi?.description || vi?.descriptionText || fallback.description || name.vi,
-    en: en?.description || en?.descriptionText || fallback.description || name.en
-  };
-  return { name, description };
-}
-
-function mapPoiDto(poi: PoiDto): POI {
-  const { name, description } = resolveLocalized(poi.localizedData, {});
-  return {
-    id: poi.id,
-    name,
-    description,
-    lat: poi.position.lat,
-    lng: poi.position.lng,
-    played: false,
-    imageUrl: poi.banner || poi.thumbnail,
-    range: poi.range
-  };
-}
-
-function mapTourDto(tour: TourDto): Tour {
-  const { name, description } = resolveLocalized(
-    tour.localizedData,
-    { name: tour.name, description: tour.description }
-  );
-  return {
-    id: tour.id,
-    name,
-    description,
-    poiIds: tour.poiIds,
-    imageUrl: tour.banner || tour.thumbnail
-  };
-}
 
 export default function App() {
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [pois, setPois] = useState<POI[]>([]);
   const [tours, setTours] = useState<Tour[]>([]);
   const [isTracking, setIsTracking] = useState(false);
-  const [language, setLanguage] = useState<SupportedLanguage>('vi');
+  const [language, setLanguage] = useState<'vi' | 'en'>('vi');
   const [playingPoi, setPlayingPoi] = useState<POI | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
 
+  // New State
   const [favorites, setFavorites] = useState<string[]>(() => {
-    const saved = localStorage.getItem(FAVORITES_KEY);
+    const saved = localStorage.getItem('autonarration_favorites');
     return saved ? JSON.parse(saved) : [];
   });
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -85,53 +32,34 @@ export default function App() {
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const [hasDownloadedData, setHasDownloadedData] = useState(() => {
-    return !!localStorage.getItem(OFFLINE_POIS_KEY);
+    return !!localStorage.getItem('autonarration_offline_pois');
   });
 
   const watchIdRef = useRef<number | null>(null);
-  const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const simulationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Save favorites
   useEffect(() => {
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    localStorage.setItem('autonarration_favorites', JSON.stringify(favorites));
   }, [favorites]);
 
   const toggleFavorite = (poiId: string) => {
-    setFavorites(prev =>
+    setFavorites(prev => 
       prev.includes(poiId) ? prev.filter(id => id !== poiId) : [...prev, poiId]
     );
   };
 
+  // Load offline data if needed
   useEffect(() => {
     if (isOffline && hasDownloadedData) {
-      const savedPois = localStorage.getItem(OFFLINE_POIS_KEY);
+      const savedPois = localStorage.getItem('autonarration_offline_pois');
       if (savedPois) {
         setPois(JSON.parse(savedPois));
       }
     }
   }, [isOffline, hasDownloadedData]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    if (isOffline && hasDownloadedData) {
-      return () => { cancelled = true; };
-    }
-
-    const loadData = async () => {
-      try {
-        const [poiDtos, tourDtos] = await Promise.all([fetchPois(), fetchTours()]);
-        if (cancelled) return;
-        setPois(poiDtos.map(mapPoiDto));
-        setTours(tourDtos.map(mapTourDto));
-      } catch (err) {
-        console.error('Failed to load data', err);
-      }
-    };
-
-    loadData();
-    return () => { cancelled = true; };
-  }, [isOffline, hasDownloadedData]);
-
+  // 1. Location Engine
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser');
@@ -143,12 +71,19 @@ export default function App() {
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
-        if (isSimulating) return;
+        if (isSimulating) return; // Ignore real GPS if simulating
         const newLoc = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         };
         setLocation(newLoc);
+        
+        // Generate POIs on first fix if empty and not offline
+        if (pois.length === 0 && !isOffline) {
+          const newPois = generateMockPOIs(newLoc.lat, newLoc.lng);
+          setPois(newPois);
+          setTours(generateMockTours());
+        }
       },
       (err) => {
         setError(err.message);
@@ -156,7 +91,7 @@ export default function App() {
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
-  }, [isSimulating]);
+  }, [isSimulating, pois.length, isOffline]);
 
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
@@ -168,37 +103,46 @@ export default function App() {
     setPlayingPoi(null);
   }, []);
 
+  // 2. Geofence Engine
   useEffect(() => {
     if (!location || !isTracking || playingPoi) return;
 
+    const RADIUS_METERS = 30; // 30m radius for easier testing
+
+    // Filter POIs that are within range and unplayed
+    // If a tour is selected, only consider POIs in that tour
     const eligiblePois = pois.filter(poi => {
       if (poi.played) return false;
       if (selectedTour && !selectedTour.poiIds.includes(poi.id)) return false;
-      const radius = poi.range ?? 30;
-      return calculateDistance(location.lat, location.lng, poi.lat, poi.lng) <= radius;
+      return calculateDistance(location.lat, location.lng, poi.lat, poi.lng) <= RADIUS_METERS;
     });
 
     if (eligiblePois.length > 0) {
+      // Sort by favorites first
       eligiblePois.sort((a, b) => {
         const aFav = favorites.includes(a.id) ? 1 : 0;
         const bFav = favorites.includes(b.id) ? 1 : 0;
-        return bFav - aFav;
+        return bFav - aFav; // Higher (1) comes first
       });
 
       const nearbyPoi = eligiblePois[0];
 
+      // 3. Narration Engine
       setPlayingPoi(nearbyPoi);
       playNarration(nearbyPoi.description[language], language, () => {
+        // On end
         setPlayingPoi(null);
         setPois((prev) => prev.map((p) => (p.id === nearbyPoi.id ? { ...p, played: true } : p)));
       });
     }
   }, [location, isTracking, pois, playingPoi, language, favorites, selectedTour]);
 
+  // Simulation logic
   const toggleSimulation = () => {
     if (isSimulating) {
       setIsSimulating(false);
       if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+      // Resume real tracking
       if (isTracking) {
         stopTracking();
         startTracking();
@@ -206,21 +150,24 @@ export default function App() {
     } else {
       setIsSimulating(true);
       if (location && pois.length > 0) {
+        // Move towards the first unplayed POI (respecting tour if selected)
         let currentLoc = { ...location };
         simulationIntervalRef.current = setInterval(() => {
           setPois(currentPois => {
             let target = currentPois.find(p => !p.played && (!selectedTour || selectedTour.poiIds.includes(p.id)));
+            // If no target in tour, just find any unplayed
             if (!target) target = currentPois.find(p => !p.played);
 
             if (target) {
+              // Move 1 meter towards target
               const dx = target.lng - currentLoc.lng;
               const dy = target.lat - currentLoc.lat;
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              const step = 0.00001;
+              const dist = Math.sqrt(dx*dx + dy*dy);
+              const step = 0.00001; // approx 1 meter
               if (dist > step) {
                 currentLoc = {
-                  lat: currentLoc.lat + (dy / dist) * step,
-                  lng: currentLoc.lng + (dx / dist) * step
+                  lat: currentLoc.lat + (dy/dist)*step,
+                  lng: currentLoc.lng + (dx/dist)*step
                 };
                 setLocation(currentLoc);
               }
@@ -232,19 +179,21 @@ export default function App() {
     }
   };
 
+  // Offline Management
   const handleDownloadData = () => {
     if (pois.length > 0) {
-      localStorage.setItem(OFFLINE_POIS_KEY, JSON.stringify(pois));
+      localStorage.setItem('autonarration_offline_pois', JSON.stringify(pois));
       setHasDownloadedData(true);
     }
   };
 
   const handleClearData = () => {
-    localStorage.removeItem(OFFLINE_POIS_KEY);
+    localStorage.removeItem('autonarration_offline_pois');
     setHasDownloadedData(false);
     setIsOffline(false);
   };
 
+  // Cleanup
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
@@ -257,20 +206,22 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-100 overflow-hidden relative">
+      {/* Map View */}
       <div className="flex-1 relative z-0">
-        <MapView
-          location={location}
-          pois={displayedPois}
-          playingPoi={playingPoi}
-          language={language}
+        <MapView 
+          location={location} 
+          pois={displayedPois} 
+          playingPoi={playingPoi} 
+          language={language} 
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
           isOffline={isOffline}
         />
-
+        
+        {/* Top Overlay */}
         <div className="absolute top-4 left-4 right-4 z-[1000] flex justify-between items-start pointer-events-none">
           <div className="flex flex-col gap-2">
-            <button
+            <button 
               onClick={() => setIsMenuOpen(true)}
               className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-lg pointer-events-auto text-gray-800 hover:bg-gray-50 transition-colors"
             >
@@ -283,9 +234,9 @@ export default function App() {
               </span>
             </div>
           </div>
-
+          
           <div className="flex flex-col gap-2 items-end">
-            <button
+            <button 
               onClick={() => setLanguage(l => l === 'vi' ? 'en' : 'vi')}
               className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg pointer-events-auto font-medium text-gray-800 hover:bg-gray-50 transition-colors"
             >
@@ -300,13 +251,15 @@ export default function App() {
         </div>
       </div>
 
+      {/* Error Toast */}
       {error && (
         <div className="absolute top-20 left-4 right-4 z-[1000] bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-xl shadow-sm">
           {error}
         </div>
       )}
 
-      <BottomPanel
+      {/* Bottom Panel */}
+      <BottomPanel 
         isTracking={isTracking}
         onStart={startTracking}
         onStop={stopTracking}
@@ -319,7 +272,7 @@ export default function App() {
         onToggleFavorite={toggleFavorite}
       />
 
-      <MenuOverlay
+      <MenuOverlay 
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
         activeTab={activeTab}
