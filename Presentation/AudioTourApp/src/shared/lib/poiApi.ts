@@ -1,21 +1,9 @@
 import type { PoiDto } from '../../entities/poi';
-
-const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:5000/api';
+import { apiGet } from './apiClient';
 
 export async function fetchPois(): Promise<PoiDto[]> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const res = await fetch(`${API_ENDPOINT}/pois/get-all`, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (!res.ok) {
-      console.warn(`API returned status ${res.status}. Using mock data.`);
-      return getMockPois();
-    }
-    const data = (await res.json()) as PoiDto[];
-    return data;
+    return await apiGet<PoiDto[]>('/pois/get-all');
   } catch (err) {
     console.log('Using mock data (API unavailable).', err);
     return getMockPois();

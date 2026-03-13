@@ -1,21 +1,9 @@
 import type { TourDto } from '../../../entities/tour';
-
-const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || 'http://localhost:5000/api';
+import { apiGet } from '../../../shared/lib/apiClient';
 
 export async function fetchTours(): Promise<TourDto[]> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const res = await fetch(`${API_ENDPOINT}/tours/get-all`, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (!res.ok) {
-      console.warn(`Tours API returned status ${res.status}. Using mock data.`);
-      return getMockTours();
-    }
-    const data = (await res.json()) as TourDto[];
-    return data;
+    return await apiGet<TourDto[]>('/tours/get-all');
   } catch (err) {
     console.log('Tours API unavailable, using mock data.', err);
     return getMockTours();
