@@ -78,7 +78,7 @@ public class PoiController : ControllerBase
         }
     }
 
-    [HttpPut("{id}")]
+    [HttpPut("{guid}")]
     public async Task<IActionResult> Update(Guid guid, [FromForm] CreatePoiRequestDto request)
     {
         try
@@ -100,6 +100,7 @@ public class PoiController : ControllerBase
 
             var poiDto = new PoiDto
             {
+                Id = guid,
                 Order = request.Order,
                 Range = request.Range,
                 Thumbnail = thumbnailUrl,
