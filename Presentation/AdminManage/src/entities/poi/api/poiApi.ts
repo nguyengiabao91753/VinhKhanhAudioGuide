@@ -5,11 +5,31 @@ type ApiResponse<T> = {
   data: T
 }
 
+type ListResponse<T> = ApiResponse<T[]> | T[] | { items: T[] } | { result: T[] }
+
 const normalizePoiResponse = (response: Poi | ApiResponse<Poi>) => {
   if (response && typeof response === 'object' && 'data' in response) {
     return response as ApiResponse<Poi>
   }
   return { data: response as Poi }
+}
+
+const normalizeListResponse = <T>(response: ListResponse<T>): ApiResponse<T[]> => {
+  if (Array.isArray(response)) {
+    return { data: response }
+  }
+  if (response && typeof response === 'object') {
+    if ('data' in response && Array.isArray((response as ApiResponse<T[]>).data)) {
+      return response as ApiResponse<T[]>
+    }
+    if ('items' in response && Array.isArray((response as { items: T[] }).items)) {
+      return { data: (response as { items: T[] }).items }
+    }
+    if ('result' in response && Array.isArray((response as { result: T[] }).result)) {
+      return { data: (response as { result: T[] }).result }
+    }
+  }
+  return { data: [] as T[] }
 }
 
 const appendFormValue = (formData: FormData, key: string, value: unknown) => {
@@ -46,8 +66,14 @@ const buildPoiFormData = (payload: PoiFormPayload) => {
 }
 
 export const poiApi = {
-  getAll: () => apiFetch<ApiResponse<Poi[]>>('/pois'),
-  getById: (id: string) => apiFetch<ApiResponse<Poi>>(`/pois/${id}`),
+  getAll: async () => {
+    const response = await apiFetch<ListResponse<Poi>>('/pois')
+    return normalizeListResponse(response)
+  },
+  getById: async (id: string) => {
+    const response = await apiFetch<Poi | ApiResponse<Poi>>(`/pois/${id}`)
+    return normalizePoiResponse(response)
+  },
   create: async (payload: PoiFormPayload) => {
     const response = await apiFetch<Poi | ApiResponse<Poi>>('/pois', {
       method: 'POST',
