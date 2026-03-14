@@ -6,6 +6,13 @@ interface TourCardProps {
 }
 
 export function TourCard({ tour, onClick }: TourCardProps) {
+  const description =
+    tour.description?.trim() ||
+    tour.localizedData?.[0]?.description ||
+    tour.localizedData?.[0]?.descriptionText ||
+    '';
+  const durationText = tour.duration > 0 ? `${tour.duration} phút` : 'N/A';
+  const distanceText = tour.distance > 0 ? `${tour.distance} km` : 'N/A';
   return (
     <div
       onClick={() => onClick(tour.id)}
@@ -50,13 +57,13 @@ export function TourCard({ tour, onClick }: TourCardProps) {
             lineHeight: 1.4,
           }}
         >
-          {tour.description.substring(0, 80)}...
+          {description ? `${description.substring(0, 80)}...` : 'Chưa có mô tả.'}
         </p>
 
         {/* Tour Meta */}
         <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#999' }}>
-          <span>⏱️ {tour.duration} phút</span>
-          <span>📍 {tour.distance} km</span>
+          <span>⏱️ {durationText}</span>
+          <span>📍 {distanceText}</span>
           <span>🎯 {tour.poiIds.length} điểm</span>
         </div>
       </div>

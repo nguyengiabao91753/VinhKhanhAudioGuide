@@ -11,9 +11,21 @@ export function TourInfoPanel({ tour, language }: TourInfoPanelProps) {
     tour.localizedData[0];
 
   const durationText =
-    language === 'en' ? `${tour.duration} min` : `${tour.duration} phút`;
+    tour.duration > 0
+      ? language === 'en'
+        ? `${tour.duration} min`
+        : `${tour.duration} phút`
+      : language === 'en'
+        ? 'N/A'
+        : 'Chưa rõ';
   const distanceText =
-    language === 'en' ? `${tour.distance} km` : `${tour.distance} km`;
+    tour.distance > 0
+      ? language === 'en'
+        ? `${tour.distance} km`
+        : `${tour.distance} km`
+      : language === 'en'
+        ? 'N/A'
+        : 'Chưa rõ';
   const stopsText = language === 'en' ? 'stops' : 'địa điểm';
 
   return (
