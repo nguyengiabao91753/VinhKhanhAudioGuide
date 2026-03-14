@@ -225,16 +225,16 @@ export function CreatePoiForm({ onSuccess, onCancel }: CreatePoiFormProps) {
         <button
           className="form-action-button form-action-cancel"
           type="button"
-          form="create-poi-form"
-          onClick={handleCancel}>
+          onClick={onCancel}>
           Hủy
         </button>
+
         <button
           className="form-action-button form-action-save"
           type="submit"
           form="create-poi-form"
           disabled={submitting || !name.trim() || lat === 0 || lng === 0}>
-          {submitting ? "Đang tạo..." : "💾 Lưu POI"}
+          {submitting ? "Đang lưu..." : "💾 Lưu POI"}
         </button>
       </div>
     </div>

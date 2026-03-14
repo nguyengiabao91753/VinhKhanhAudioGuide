@@ -809,6 +809,15 @@ select.app-input {
   min-height: 0;
 }
 
+/* POI form: restore grid display so left/right columns work */
+.poi-form-wrapper > form.form-grid {
+  display: grid;
+  flex-direction: unset;
+  height: auto;
+  min-height: unset;
+  align-items: start;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: 380px 1fr;
@@ -844,6 +853,8 @@ select.app-input {
 
   overflow-y: auto;
   padding-right: 10px;
+  max-height: 100%;
+  align-self: stretch;
 }
 
 /* ===== RIGHT COLUMN ===== */
@@ -999,7 +1010,7 @@ select.app-input {
   border-radius: 16px;
   padding: 16px;
   background: #ffffff;
-  height: 620px;
+  height: 460px;
   display: flex;
   flex-direction: column;
 }
