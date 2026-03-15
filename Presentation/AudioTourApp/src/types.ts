@@ -9,6 +9,7 @@ export type POI = {
   played: boolean;
   imageUrl?: string;
   range?: number;
+  priority?: number;
 };
 
 export type Tour = {

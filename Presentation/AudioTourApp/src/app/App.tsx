@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import MapView from '../components/MapView';
 import BottomPanel from '../components/BottomPanel';
 import MenuOverlay from '../components/MenuOverlay';
-import { calculateDistance } from '../utils/geo';
 import { playNarration, stopNarration } from '../engines/NarrationEngine';
 import type { POI, Tour } from '../types';
 import { Menu } from 'lucide-react';
@@ -10,6 +9,8 @@ import { fetchTours } from '../features/tour';
 import { fetchPois } from '../shared/lib';
 import type { LocalizedData, PoiDto } from '../entities/poi';
 import type { TourDto } from '../entities/tour';
+import { GeofenceEngine } from '../features/geofence/model/GeofenceEngine';
+import type { GeofenceMode } from '../shared/types/geofence';
 
 type SupportedLanguage = 'vi' | 'en';
 
@@ -18,7 +19,7 @@ const OFFLINE_POIS_KEY = 'autonarration_offline_pois';
 
 function pickLocalized(list: LocalizedData[] | undefined, lang: SupportedLanguage) {
   if (!list || list.length === 0) return undefined;
-  return list.find(l => l.langCode === lang) ?? list[0];
+  return list.find((l) => l.langCode === lang) ?? list[0];
 }
 
 function resolveLocalized(
@@ -27,14 +28,17 @@ function resolveLocalized(
 ) {
   const vi = pickLocalized(list, 'vi');
   const en = pickLocalized(list, 'en');
+
   const name = {
     vi: vi?.name || fallback.name || '',
-    en: en?.name || fallback.name || ''
+    en: en?.name || fallback.name || '',
   };
+
   const description = {
     vi: vi?.description || vi?.descriptionText || fallback.description || name.vi,
-    en: en?.description || en?.descriptionText || fallback.description || name.en
+    en: en?.description || en?.descriptionText || fallback.description || name.en,
   };
+
   return { name, description };
 }
 
@@ -48,21 +52,23 @@ function mapPoiDto(poi: PoiDto): POI {
     lng: poi.position.lng,
     played: false,
     imageUrl: poi.banner || poi.thumbnail,
-    range: poi.range
+    range: poi.range ?? 30,
+    priority: 1000 - (poi.order ?? 0),
   };
 }
 
 function mapTourDto(tour: TourDto): Tour {
-  const { name, description } = resolveLocalized(
-    tour.localizedData,
-    { name: tour.name, description: tour.description }
-  );
+  const { name, description } = resolveLocalized(tour.localizedData, {
+    name: tour.name,
+    description: tour.description,
+  });
+
   return {
     id: tour.id,
     name,
     description,
     poiIds: tour.poiIds,
-    imageUrl: tour.banner || tour.thumbnail
+    imageUrl: tour.banner || tour.thumbnail,
   };
 }
 
@@ -75,11 +81,14 @@ export default function App() {
   const [playingPoi, setPlayingPoi] = useState<POI | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [gpsPollMs, setGpsPollMs] = useState(5000);
+  const [geofenceMode, setGeofenceMode] = useState<GeofenceMode>('CRUISE');
 
   const [favorites, setFavorites] = useState<string[]>(() => {
     const saved = localStorage.getItem(FAVORITES_KEY);
     return saved ? JSON.parse(saved) : [];
   });
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'tours' | 'favorites' | 'offline'>('tours');
   const [selectedTour, setSelectedTour] = useState<Tour | null>(null);
@@ -88,16 +97,31 @@ export default function App() {
     return !!localStorage.getItem(OFFLINE_POIS_KEY);
   });
 
-  const watchIdRef = useRef<number | null>(null);
   const simulationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const geofenceRef = useRef(
+    new GeofenceEngine({
+      cruisePollMs: 5000,
+      approachPollMs: 1000,
+      bufferRadiusMeters: 100,
+      coreRadiusMeters: 30,
+      enterDebounceMs: 3000,
+      cooldownMs: 5 * 60 * 1000,
+    })
+  );
+
+  const relevantPois = useMemo(() => {
+    return selectedTour
+      ? pois.filter((p) => selectedTour.poiIds.includes(p.id))
+      : pois;
+  }, [pois, selectedTour]);
 
   useEffect(() => {
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
   }, [favorites]);
 
   const toggleFavorite = (poiId: string) => {
-    setFavorites(prev =>
-      prev.includes(poiId) ? prev.filter(id => id !== poiId) : [...prev, poiId]
+    setFavorites((prev) =>
+      prev.includes(poiId) ? prev.filter((id) => id !== poiId) : [...prev, poiId]
     );
   };
 
@@ -114,7 +138,9 @@ export default function App() {
     let cancelled = false;
 
     if (isOffline && hasDownloadedData) {
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+      };
     }
 
     const loadData = async () => {
@@ -129,8 +155,48 @@ export default function App() {
     };
 
     loadData();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOffline, hasDownloadedData]);
+
+  const pollCurrentPosition = useCallback(() => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser');
+      setIsTracking(false);
+      return;
+    }
+
+
+
+    navigator.geolocation.getCurrentPosition(
+  (position) => {
+    if (isSimulating) return;
+
+    setLocation({
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+    });
+
+    setError(null);
+
+    console.log('GPS update:', {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      accuracy: position.coords.accuracy,
+      speed: position.coords.speed,
+    });
+  },
+
+
+
+      (err) => {
+        setError(err.message);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+  }, [isSimulating]);
 
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
@@ -140,91 +206,143 @@ export default function App() {
 
     setIsTracking(true);
     setError(null);
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (position) => {
-        if (isSimulating) return;
-        const newLoc = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        setLocation(newLoc);
-      },
-      (err) => {
-        setError(err.message);
-        setIsTracking(false);
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-    );
-  }, [isSimulating]);
+    pollCurrentPosition();
+  }, [pollCurrentPosition]);
 
   const stopTracking = useCallback(() => {
-    if (watchIdRef.current !== null) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
     setIsTracking(false);
     stopNarration();
     setPlayingPoi(null);
+    setGpsPollMs(5000);
+    setGeofenceMode('CRUISE');
+    geofenceRef.current.reset();
   }, []);
 
   useEffect(() => {
-    if (!location || !isTracking || playingPoi) return;
+    if (!isTracking || isSimulating) return;
 
-    const eligiblePois = pois.filter(poi => {
-      if (poi.played) return false;
-      if (selectedTour && !selectedTour.poiIds.includes(poi.id)) return false;
-      const radius = poi.range ?? 30;
-      return calculateDistance(location.lat, location.lng, poi.lat, poi.lng) <= radius;
-    });
+    pollCurrentPosition();
 
-    if (eligiblePois.length > 0) {
-      eligiblePois.sort((a, b) => {
-        const aFav = favorites.includes(a.id) ? 1 : 0;
-        const bFav = favorites.includes(b.id) ? 1 : 0;
-        return bFav - aFav;
-      });
+    const timer = window.setInterval(() => {
+      pollCurrentPosition();
+    }, gpsPollMs);
 
-      const nearbyPoi = eligiblePois[0];
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isTracking, isSimulating, gpsPollMs, pollCurrentPosition]);
 
-      setPlayingPoi(nearbyPoi);
-      playNarration(nearbyPoi.description[language], language, () => {
-        setPlayingPoi(null);
-        setPois((prev) => prev.map((p) => (p.id === nearbyPoi.id ? { ...p, played: true } : p)));
-      });
+  useEffect(() => {
+    if (!location || !isTracking) return;
+
+    const summary = geofenceRef.current.updatePosition(location, relevantPois);
+
+    setGeofenceMode(summary.mode);
+
+    if (summary.suggestedPollMs !== gpsPollMs) {
+      setGpsPollMs(summary.suggestedPollMs);
     }
-  }, [location, isTracking, pois, playingPoi, language, favorites, selectedTour]);
+
+    const prefetchPois = geofenceRef.current.getPrefetchPois(relevantPois);
+
+    for (const poi of prefetchPois) {
+      geofenceRef.current.markPrefetched(poi.id);
+      console.log('[Prefetch Trigger]', poi.id, poi.name);
+    }
+  }, [location, isTracking, relevantPois, gpsPollMs]);
+
+  useEffect(() => {
+    if (!isTracking || !location || playingPoi) return;
+
+    const timer = window.setInterval(() => {
+      const readyPois = geofenceRef.current.getReadyPois(
+        relevantPois,
+        {
+          selectedTourPoiIds: selectedTour?.poiIds ?? [],
+          favorites,
+        }
+      );
+
+      if (readyPois.length === 0) return;
+
+      const targetPoi = readyPois[0];
+
+      setPlayingPoi(targetPoi);
+      geofenceRef.current.markTriggered(targetPoi.id);
+
+      playNarration(targetPoi.description[language], language, () => {
+        setPlayingPoi(null);
+        setPois((prev) =>
+          prev.map((p) => (p.id === targetPoi.id ? { ...p, played: true } : p))
+        );
+      });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [isTracking, location, playingPoi, relevantPois, selectedTour, favorites, language]);
+
+  useEffect(() => {
+    geofenceRef.current.reset();
+    setPois((prev) => prev.map((p) => ({ ...p, played: false })));
+    setPlayingPoi(null);
+    setGpsPollMs(5000);
+    setGeofenceMode('CRUISE');
+    stopNarration();
+  }, [selectedTour]);
+
+  useEffect(() => {
+    geofenceRef.current.reset();
+    setGpsPollMs(5000);
+    setGeofenceMode('CRUISE');
+  }, [isOffline]);
 
   const toggleSimulation = () => {
     if (isSimulating) {
       setIsSimulating(false);
-      if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+        simulationIntervalRef.current = null;
+      }
+
       if (isTracking) {
-        stopTracking();
-        startTracking();
+        pollCurrentPosition();
       }
     } else {
       setIsSimulating(true);
-      if (location && pois.length > 0) {
+
+      if (location && relevantPois.length > 0) {
         let currentLoc = { ...location };
+
         simulationIntervalRef.current = setInterval(() => {
-          setPois(currentPois => {
-            let target = currentPois.find(p => !p.played && (!selectedTour || selectedTour.poiIds.includes(p.id)));
-            if (!target) target = currentPois.find(p => !p.played);
+          setPois((currentPois) => {
+            const currentRelevantPois = selectedTour
+              ? currentPois.filter((p) => selectedTour.poiIds.includes(p.id))
+              : currentPois;
+
+            let target = currentRelevantPois.find((p) => !p.played);
+
+            if (!target) {
+              target = currentPois.find((p) => !p.played);
+            }
 
             if (target) {
               const dx = target.lng - currentLoc.lng;
               const dy = target.lat - currentLoc.lat;
               const dist = Math.sqrt(dx * dx + dy * dy);
-              const step = 0.00001;
+              const step = 0.00005;
+
               if (dist > step) {
                 currentLoc = {
                   lat: currentLoc.lat + (dy / dist) * step,
-                  lng: currentLoc.lng + (dx / dist) * step
+                  lng: currentLoc.lng + (dx / dist) * step,
                 };
                 setLocation(currentLoc);
               }
             }
+
             return currentPois;
           });
         }, 1000);
@@ -247,13 +365,14 @@ export default function App() {
 
   useEffect(() => {
     return () => {
-      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
-      if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+      if (simulationIntervalRef.current) {
+        clearInterval(simulationIntervalRef.current);
+      }
       stopNarration();
     };
   }, []);
 
-  const displayedPois = selectedTour ? pois.filter(p => selectedTour.poiIds.includes(p.id)) : pois;
+  const displayedPois = relevantPois;
 
   return (
     <div className="flex flex-col h-screen bg-gray-100 overflow-hidden relative">
@@ -272,25 +391,50 @@ export default function App() {
           <div className="flex flex-col gap-2">
             <button
               onClick={() => setIsMenuOpen(true)}
+              aria-label="Open menu"
               className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-lg pointer-events-auto text-gray-800 hover:bg-gray-50 transition-colors"
             >
               <Menu size={24} />
             </button>
+
             <div className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-lg pointer-events-auto flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${isTracking ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  isTracking ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'
+                }`}
+              />
               <span className="font-medium text-gray-800">
-                {isTracking ? (language === 'vi' ? 'GPS Đang bật' : 'GPS Active') : (language === 'vi' ? 'GPS Đã dừng' : 'GPS Paused')}
+                {isTracking
+                  ? language === 'vi'
+                    ? 'GPS Đang bật'
+                    : 'GPS Active'
+                  : language === 'vi'
+                  ? 'GPS Đã dừng'
+                  : 'GPS Paused'}
               </span>
             </div>
+
+            {isTracking && (
+              <div className="bg-white/90 backdrop-blur-md px-3 py-2 rounded-2xl shadow-lg pointer-events-auto text-sm text-gray-700">
+                <div>
+                  Mode: <span className="font-semibold">{geofenceMode}</span>
+                </div>
+                <div>
+                  Poll: <span className="font-semibold">{gpsPollMs / 1000}s</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-2 items-end">
             <button
-              onClick={() => setLanguage(l => l === 'vi' ? 'en' : 'vi')}
+              onClick={() => setLanguage((l) => (l === 'vi' ? 'en' : 'vi'))}
+              aria-label="Switch language"
               className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg pointer-events-auto font-medium text-gray-800 hover:bg-gray-50 transition-colors"
             >
               {language === 'vi' ? '🇻🇳 VN' : '🇬🇧 EN'}
             </button>
+
             {isOffline && (
               <div className="bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg pointer-events-auto">
                 {language === 'vi' ? 'NGOẠI TUYẾN' : 'OFFLINE'}
