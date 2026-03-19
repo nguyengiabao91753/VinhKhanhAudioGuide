@@ -37,7 +37,7 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
 
   const [name, setName] = useState(viData?.name || "");
   const [description, setDescription] = useState(viData?.description || "");
-  const [address, setAddress] = useState(viData?.descriptionText || "");
+  // address không có trong DB, để trống
   const [category, setCategory] = useState(
     isCategoryValue(viData?.descriptionAudio)
       ? viData?.descriptionAudio || "MAIN"
@@ -123,9 +123,9 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
         localizedData: generatedContent.map((content) => ({
           langCode: content.langCode,
           name,
-          description: content.translatedText,
-          descriptionText: address,
-          descriptionAudio: content.audioUrl || "",
+          description: description, // text gốc tiếng Việt
+          descriptionText: content.translatedText, // text đã dịch theo ngôn ngữ
+          descriptionAudio: content.audioBase64 || content.audioUrl || "",
         })),
         thumbnailFile,
         bannerFile,
@@ -163,7 +163,7 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
         ...item,
         name,
         description,
-        descriptionText: address,
+        descriptionText: item.descriptionText, // giữ nguyên text đã dịch
         descriptionAudio: category,
       })),
       thumbnailFile,
@@ -221,21 +221,13 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
               <option value="BOAT">Bến thuyền (BOAT)</option>
             </select>
 
-            <label className="form-label">Mô tả ngắn</label>
+            <label className="form-label">Mô tả ngắn (tiếng Việt)</label>
             <textarea
               className="app-input app-textarea"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Nhập mô tả ngắn về địa điểm..."
+              placeholder="Nhập mô tả chi tiết về địa điểm bằng tiếng Việt..."
               rows={4}
-            />
-
-            <label className="form-label">Địa chỉ</label>
-            <input
-              className="app-input"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="212 Vĩnh Khánh, Quận 4"
             />
 
             <label className="form-label">Bán kính (m)</label>

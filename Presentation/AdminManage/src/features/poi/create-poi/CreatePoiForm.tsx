@@ -179,23 +179,25 @@ export function CreatePoiForm({ onSuccess, onCancel }: CreatePoiFormProps) {
         localizedData: generatedContent.map((content) => ({
           langCode: content.langCode,
           name,
-          description: content.translatedText,
-          descriptionText: address,
-          // Prioritize audioBase64 (preview from multilingual), fallback to audioUrl (if already uploaded)
+          description: description,
+          descriptionText: content.translatedText,
           descriptionAudio: content.audioBase64 || content.audioUrl || "",
         })),
         thumbnailFile,
         bannerFile,
       };
 
-      console.log("=== POI Create Payload ===", {
-        poiName: name,
-        localizedDataCount: payload.localizedData.length,
-        localizedData: payload.localizedData.map(ld => ({
-          langCode: ld.langCode,
-          descriptionAudio: ld.descriptionAudio ? "✓ base64" : "✗ none"
-        }))
-      });
+      // console.log("=== POI Create Payload ===", {
+      //   poiName: name,
+      //   localizedDataCount: payload.localizedData.length,
+      //   localizedData: generatedContent.map((content) => ({
+      //     langCode: content.langCode,
+      //     name,
+      //     description: description, // text gốc tiếng Việt (input của user)
+      //     descriptionText: content.translatedText, // text đã dịch theo ngôn ngữ
+      //     descriptionAudio: content.audioBase64 || content.audioUrl || "",
+      //   })),
+      // });
 
       await poiApi.create(payload);
       resetForm();
