@@ -54,3 +54,15 @@ TestResult.xml
 nunit-*.xml
 
 .vs
+
+# Python virtual environment
+myenv/
+venv/
+.env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node (nếu có)
+node_modules/

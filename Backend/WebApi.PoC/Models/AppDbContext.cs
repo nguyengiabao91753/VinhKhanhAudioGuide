@@ -35,10 +35,10 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e._id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.banner)
                 .HasMaxLength(500)
-                .IsUnicode(false);
+                .IsUnicode(true);
             entity.Property(e => e.thumbnail)
                 .HasMaxLength(500)
-                .IsUnicode(false);
+                .IsUnicode(true);
 
             entity.HasOne(d => d.position).WithMany(p => p.pois)
                 .HasForeignKey(d => d.position_id)
@@ -51,16 +51,16 @@ public partial class AppDbContext : DbContext
 
             entity.Property(e => e.lang_code)
                 .HasMaxLength(10)
-                .IsUnicode(false);
+                .IsUnicode(true);
             entity.Property(e => e.description_audio)
                 .HasMaxLength(500)
-                .IsUnicode(false);
+                .IsUnicode(true);
             entity.Property(e => e.description_text)
                 .HasMaxLength(500)
-                .IsUnicode(false);
+                .IsUnicode(true);
             entity.Property(e => e.name)
                 .HasMaxLength(255)
-                .IsUnicode(false);
+                .IsUnicode(true);
 
             entity.HasOne(d => d.pois).WithMany(p => p.pois_localizedData)
                 .HasForeignKey(d => d.pois_id)
@@ -75,7 +75,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e._id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.type)
                 .HasMaxLength(50)
-                .IsUnicode(false);
+                .IsUnicode(true);
         });
 
         modelBuilder.Entity<tour>(entity =>
@@ -85,7 +85,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e._id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.name)
                 .HasMaxLength(255)
-                .IsUnicode(false);
+                .IsUnicode(true);
         });
 
         modelBuilder.Entity<tour_points>(entity =>
