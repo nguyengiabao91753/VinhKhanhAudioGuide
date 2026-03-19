@@ -4,6 +4,8 @@ import json
 import os
 import logging
 from datetime import datetime
+from dotenv import load_dotenv
+load_dotenv()
 
 # Modules
 from services.ollama_service import OllamaService

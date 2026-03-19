@@ -40,7 +40,15 @@ public class OllamaService : IOllamaService
 
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<PreprocessApiResponse>();
+            var jsonString = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("Preprocess raw response: {json}", jsonString);
+            var result = System.Text.Json.JsonSerializer.Deserialize<PreprocessApiResponse>(
+                jsonString,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }
+            );
 
             if (result?.Success == true)
             {
@@ -69,7 +77,10 @@ public class OllamaService : IOllamaService
     private class PreprocessApiResponse
     {
         public bool Success { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("fixed_text")]
         public string? FixedText { get; set; }
+
         public List<NamedEntity>? Entities { get; set; }
-    }
+    }   
 }

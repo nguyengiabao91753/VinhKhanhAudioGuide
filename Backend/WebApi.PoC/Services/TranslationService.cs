@@ -57,6 +57,9 @@ public class TranslationService : ITranslationService
 
             var result = await response.Content.ReadFromJsonAsync<TranslateApiResponse>();
 
+            var rawJson = await response.Content.ReadAsStringAsync();
+            _logger.LogInformation("Translation raw response: {json}", rawJson);
+
             if (result?.Success == true && !string.IsNullOrEmpty(result.TranslatedText))
             {
                 _cache[cacheKey] = result.TranslatedText;
@@ -81,6 +84,8 @@ public class TranslationService : ITranslationService
     private class TranslateApiResponse
     {
         public bool Success { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("translated_text")]
         public string? TranslatedText { get; set; }
     }
 }

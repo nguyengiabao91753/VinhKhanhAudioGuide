@@ -44,13 +44,26 @@ public class MultilingualGeneratorService : IMultilingualGeneratorService
 
             var preprocessed = await _ollamaService.PreprocessTextAsync(sourceText, sourceLanguage);
 
+            // DEBUG LOG - xóa sau khi fix xong
+            _logger.LogInformation("=== PREPROCESS RESULT ===");
+            _logger.LogInformation("FixedText: {fixedText}", preprocessed.FixedText);
+            _logger.LogInformation("Entities count: {count}", preprocessed.Entities.Count);
+            foreach (var e in preprocessed.Entities)
+                _logger.LogInformation("Entity: [{original}] -> EnglishPronunciation=[{pronunciation}]", e.Original, e.EnglishPronunciation);
+            _logger.LogInformation("=========================");
+
             // Create entity mappings for translation preservation
             var entityMappings = new Dictionary<string, string>();
             foreach (var entity in preprocessed.Entities)
             {
-                if (!string.IsNullOrEmpty(entity.Original) && !string.IsNullOrEmpty(entity.ProperName))
+                if (!string.IsNullOrEmpty(entity.Original))
                 {
-                    entityMappings[entity.Original] = entity.ProperName;
+                    var mappedName = !string.IsNullOrEmpty(entity.EnglishPronunciation)
+                        ? entity.EnglishPronunciation
+                        : entity.ProperName;
+
+                    if (!string.IsNullOrEmpty(mappedName))
+                        entityMappings[entity.Original] = mappedName;
                 }
             }
 

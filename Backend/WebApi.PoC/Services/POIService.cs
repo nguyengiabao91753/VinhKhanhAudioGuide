@@ -17,6 +17,10 @@ public class POIService : IPOIService
     {
         try
         {
+            foreach (var ld in poiDto.LocalizedData)
+            {
+                Console.WriteLine($"[DB SAVE] lang={ld.LangCode} | descText={ld.DescriptionText}");
+            }
             var poi = new pois
             {
                 range = poiDto.Range,
@@ -28,6 +32,7 @@ public class POIService : IPOIService
                     coordinates_x = poiDto.Position.Lng,
                     coordinates_y = poiDto.Position.Lat
                 },
+
                 pois_localizedData = poiDto.LocalizedData.Select(ld => new pois_localizedData
                 {
                     lang_code = ld.LangCode,
@@ -37,6 +42,10 @@ public class POIService : IPOIService
                     description_audio = ld.DescriptionAudio
                 }).ToList()
             };
+            foreach (var ld in poiDto.LocalizedData)
+            {
+                Console.WriteLine($"[DB SAVE] lang={ld.LangCode} | descText={ld.DescriptionText}");
+            }
             await _db.pois.AddAsync(poi);
 
             await _db.SaveChangesAsync();

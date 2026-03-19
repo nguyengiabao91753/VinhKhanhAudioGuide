@@ -1,3 +1,7 @@
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
+
+
 namespace WebApi.PoC.Services.IServices;
 
 public interface IOllamaService
@@ -15,10 +19,18 @@ public class TextPreprocessResult
     public List<NamedEntity> Entities { get; set; } = new();
 }
 
+
 public class NamedEntity
 {
     public string Original { get; set; } = string.Empty;
-    public string Type { get; set; } = string.Empty;  // "PERSON", "LOCATION", "LANDMARK", etc.
+    public string Type { get; set; } = string.Empty;
+
+    [JsonPropertyName("proper_name")]
     public string ProperName { get; set; } = string.Empty;
-    public Dictionary<string, string>? LocalizedNames { get; set; }  // e.g., {"en": "Mr Sáu", "fr": "M. Sáu"}
+
+    [JsonPropertyName("english_pronunciation")]
+    public string EnglishPronunciation { get; set; } = string.Empty;
+
+    [JsonPropertyName("localized_names")]
+    public Dictionary<string, string>? LocalizedNames { get; set; }
 }

@@ -86,7 +86,7 @@ Copy `.env.example` to `.env` and update:
 
 ```env
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama2
+OLLAMA_MODEL=llama3.2
 PIPER_PATH=/usr/bin/piper
 WHISPER_MODEL=base
 PYTHON_API_PORT=5000

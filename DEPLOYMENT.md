@@ -222,7 +222,7 @@ Frontend will be available at: `http://localhost:5173` (or shown in console)
 PYTHON_API_HOST=0.0.0.0
 PYTHON_API_PORT=5000
 OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama2
+OLLAMA_MODEL=llama3.2
 WHISPER_MODEL=base
 PIPER_PATH=/usr/bin/piper
 ```

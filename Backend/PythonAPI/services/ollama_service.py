@@ -9,12 +9,12 @@ logger = logging.getLogger(__name__)
 class OllamaService:
     def __init__(self):
         self.base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
-        self.model = os.getenv('OLLAMA_MODEL', 'llama2')
+        self.model = os.getenv('OLLAMA_MODEL', 'phi')
         self.timeout = 300  # 5 minutes
 
     def preprocess(self, text: str, language: str = 'vi') -> dict:
         """
-        Preprocess text: fix grammar, identify entities
+        Preprocess text: fix grammar, identify entities with pronunciation hints
         """
         if not text:
             return {'fixed_text': text, 'entities': []}
@@ -44,7 +44,6 @@ class OllamaService:
                 logger.warning("Ollama returned empty response")
                 return {'fixed_text': text, 'entities': []}
 
-            # Parse JSON from Ollama response
             fixed_text, entities = self._parse_response(response_text, text)
 
             return {
@@ -54,7 +53,6 @@ class OllamaService:
 
         except requests.exceptions.ConnectionError:
             logger.error("Failed to connect to Ollama API")
-            # Fallback: return original text
             return {'fixed_text': text, 'entities': []}
         except requests.exceptions.Timeout:
             logger.error("Ollama API request timeout")
@@ -66,39 +64,26 @@ class OllamaService:
     def _get_system_prompt(self, language: str) -> str:
         """Get system prompt for Ollama based on language"""
         if language == 'vi':
-            return """You are a Vietnamese language expert. Your task is to:
-1. Fix grammar and spelling errors in the provided text
-2. Identify and list all proper nouns (people names, place names, landmarks, etc.)
-3. For each proper noun, provide its type (PERSON, LOCATION, LANDMARK, etc.)
-
-Return response as JSON with this format:
-{
-  "fixed_text": "corrected text here",
-  "entities": [
-    {"original": "original name", "type": "PERSON", "proper_name": "corrected name"}
-  ]
-}
-
-Only return valid JSON, no other text."""
+            lines = [
+                "You are a Vietnamese proper noun identifier. Output ONLY valid JSON.",
+                "CRITICAL: english_pronunciation is TRANSLITERATION only, NEVER translate the meaning of names.",
+                "Sau=Sau (not Six), Hung=Hung (not Heroic), Thanh=Thanh (not Pure), Minh=Minh (not Bright).",
+                "PERSON: Mr or Mrs + name with diacritics removed. Keep name sound exactly as-is.",
+                "LOCATION: use official English name if exists (Ho Chi Minh City, Hanoi, Da Nang), else remove diacritics only.",
+                "LANDMARK: remove diacritics only, do not translate.",
+                'Example output: {"fixed_text": "Nha hang ong Sau", "entities": [{"original": "ong Sau", "type": "PERSON", "proper_name": "ong Sau", "english_pronunciation": "Mr Sau"}, {"original": "Nha hang", "type": "LANDMARK", "proper_name": "Nha hang", "english_pronunciation": "Nha Hang"}]}',
+                "Output ONLY the JSON object. No explanation, no markdown, no extra text."
+            ]
+            return "\n".join(lines)
         else:
-            return """You are a language expert. Your task is to:
-1. Fix grammar and spelling errors in the provided text
-2. Identify and list all proper nouns (people names, place names, landmarks, etc.)
-
-Return response as JSON with this format:
-{
-  "fixed_text": "corrected text here",
-  "entities": [
-    {"original": "original name", "type": "PERSON", "proper_name": "corrected name"}
-  ]
-}
-
-Only return valid JSON, no other text."""
+            return ('Output ONLY a JSON object: '
+                    '{"fixed_text": "corrected text", "entities": ['
+                    '{"original": "name", "type": "PERSON", "proper_name": "name", "english_pronunciation": "pronunciation"}'
+                    ']}. No explanation, no markdown.')
 
     def _parse_response(self, response_text: str, fallback_text: str) -> tuple:
         """Parse JSON response from Ollama"""
         try:
-            # Find JSON in response
             json_start = response_text.find('{')
             json_end = response_text.rfind('}') + 1
 
