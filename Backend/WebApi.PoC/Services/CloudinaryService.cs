@@ -39,5 +39,37 @@ namespace WebApi.PoC.Services
 
             return uploadResult.SecureUrl.ToString();
         }
+
+        public async Task<String?> UploadAudioAsync(Stream audioStream, string fileName)
+        {
+            if (audioStream == null || audioStream.Length == 0)
+                return null;
+
+            try
+            {
+                // IMPORTANT: Reset stream position to 0 before uploading
+                // Stream position might be at the end after being read/written
+                if (audioStream.CanSeek)
+                {
+                    audioStream.Seek(0, SeekOrigin.Begin);
+                }
+
+                var uploadParams = new VideoUploadParams
+                {
+                    File = new FileDescription(fileName, audioStream),
+                    PublicId = Path.GetFileNameWithoutExtension(fileName),
+                    UseFilename = true,
+                    Overwrite = false
+                };
+
+                var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+
+                return uploadResult.SecureUrl?.ToString();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to upload audio to Cloudinary: {ex.Message}", ex);
+            }
+        }
     }
 }
