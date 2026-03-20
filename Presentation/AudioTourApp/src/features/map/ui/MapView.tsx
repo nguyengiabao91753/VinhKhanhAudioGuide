@@ -1,117 +1,127 @@
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+// features/map/ui/MapView.tsx — used by TourActivePage
+import { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import type { PoiDto } from '../../../entities/poi';
-import type { Location } from '../../location';
-import styles from './MapView.module.css';
+import type { SmoothLocation } from '../../location/lib/SmoothLocationService';
 
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: string })._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+// ── Icons ─────────────────────────────────────────────────────────────────
+function buildUserDivIcon(bearing: number): L.DivIcon {
+  const r = 44; const cx = 36; const cy = 36; const half = 35;
+  const s = ((bearing - half - 90) * Math.PI) / 180;
+  const e = ((bearing + half - 90) * Math.PI) / 180;
+  const x1 = cx + r * Math.cos(s); const y1 = cy + r * Math.sin(s);
+  const x2 = cx + r * Math.cos(e); const y2 = cy + r * Math.sin(e);
+  const html = `
+    <div style="position:relative;width:72px;height:72px">
+      <svg width="72" height="72" style="position:absolute;overflow:visible">
+        <path d="M${cx} ${cy}L${x1.toFixed(1)} ${y1.toFixed(1)}A${r} ${r} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}Z"
+          fill="rgba(59,130,246,.22)" stroke="rgba(59,130,246,.55)" stroke-width="1"/>
+      </svg>
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+        width:18px;height:18px;border-radius:50%;background:#3B82F6;border:3px solid #fff;
+        box-shadow:0 2px 10px rgba(59,130,246,.5)"></div>
+    </div>`;
+  return L.divIcon({ html, className: '', iconSize: [72, 72], iconAnchor: [36, 36] });
+}
 
-const userIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+function buildPoiDivIcon(isActive: boolean): L.DivIcon {
+  const c = isActive ? '#10b981' : '#f97316';
+  const ripple = isActive ? `
+    <div style="position:absolute;top:50%;left:50%;width:24px;height:24px;border-radius:50%;border:2px solid ${c};transform:translate(-50%,-50%);animation:rpl 1.8s ease-out infinite"></div>
+    <div style="position:absolute;top:50%;left:50%;width:24px;height:24px;border-radius:50%;border:2px solid ${c};transform:translate(-50%,-50%);animation:rpl 1.8s ease-out .6s infinite"></div>` : '';
+  return L.divIcon({
+    html: `<div style="position:relative;width:36px;height:36px">${ripple}
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+        width:18px;height:18px;border-radius:50%;background:${c};border:2.5px solid #fff;
+        box-shadow:0 2px 8px ${c}88;z-index:1"></div></div>`,
+    className: '', iconSize: [36, 36], iconAnchor: [18, 18],
+  });
+}
 
-const poiIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const activePoiIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-function MapUpdater({ location }: { location: Location | null }) {
+// ── Imperative markers layer ──────────────────────────────────────────────
+function MarkersLayer({
+  pois, activePoi, userLocation, bearing, language, onMarkerClick,
+}: {
+  pois: PoiDto[]; activePoi: PoiDto | null;
+  userLocation: SmoothLocation | null; bearing: number;
+  language: string; onMarkerClick: (p: PoiDto) => void;
+}) {
   const map = useMap();
+  const userRef = useRef<L.Marker | null>(null);
+  const poiRefs = useRef<Map<string, L.Marker>>(new Map());
+
   useEffect(() => {
-    if (location) {
-      map.setView([location.latitude, location.longitude], map.getZoom());
+    if (!userLocation) return;
+    const icon = buildUserDivIcon(bearing);
+    const ll: L.LatLngTuple = [userLocation.lat, userLocation.lng];
+    if (!userRef.current) {
+      userRef.current = L.marker(ll, { icon, zIndexOffset: 999 }).addTo(map);
+    } else {
+      userRef.current.setLatLng(ll).setIcon(icon);
     }
-  }, [location, map]);
+    map.panTo(ll, { animate: true, duration: 0.4, easeLinearity: 0.5 });
+  }, [userLocation, bearing, map]);
+
+  useEffect(() => {
+    const active = activePoi?.id;
+    for (const poi of pois) {
+      const isActive = poi.id === active;
+      const icon = buildPoiDivIcon(isActive);
+      const ll: L.LatLngTuple = [poi.position.lat, poi.position.lng];
+      if (poiRefs.current.has(poi.id)) {
+        poiRefs.current.get(poi.id)!.setIcon(icon);
+      } else {
+        const m = L.marker(ll, { icon }).addTo(map);
+        m.on('click', () => onMarkerClick(poi));
+        poiRefs.current.set(poi.id, m);
+      }
+    }
+    // cleanup
+    const ids = new Set(pois.map((p) => p.id));
+    poiRefs.current.forEach((m, id) => { if (!ids.has(id)) { m.remove(); poiRefs.current.delete(id); } });
+  }, [pois, activePoi, map, onMarkerClick]);
+
+  useEffect(() => () => {
+    userRef.current?.remove();
+    poiRefs.current.forEach((m) => m.remove());
+  }, []);
+
   return null;
 }
 
+// Inject CSS once
+let injected = false;
+function injectCSS() {
+  if (injected) return; injected = true;
+  const s = document.createElement('style');
+  s.textContent = `@keyframes rpl{0%{transform:translate(-50%,-50%) scale(1);opacity:.7}100%{transform:translate(-50%,-50%) scale(3.5);opacity:0}}`;
+  document.head.appendChild(s);
+}
+
+// ── Exported component ────────────────────────────────────────────────────
 interface MapViewProps {
-  pois: PoiDto[];
-  userLocation: Location | null;
-  activePoi: PoiDto | null;
-  onMarkerClick: (poi: PoiDto) => void;
+  pois: PoiDto[]; userLocation: SmoothLocation | null;
+  activePoi: PoiDto | null; onMarkerClick: (p: PoiDto) => void;
   currentLanguage: string;
 }
 
-export function MapView({
-  pois,
-  userLocation,
-  activePoi,
-  onMarkerClick,
-  currentLanguage,
-}: MapViewProps) {
-  const defaultCenter = userLocation
-    ? [userLocation.latitude, userLocation.longitude]
-    : pois[0]
-      ? [pois[0].position.lat, pois[0].position.lng]
-      : [10.7578, 106.7042];
+export function MapView({ pois, userLocation, activePoi, onMarkerClick, currentLanguage }: MapViewProps) {
+  injectCSS();
+  const center: L.LatLngTuple = userLocation
+    ? [userLocation.lat, userLocation.lng]
+    : pois[0] ? [pois[0].position.lat, pois[0].position.lng] : [10.7578, 106.7042];
 
   return (
-    <div className={styles.mapContainer}>
-      <MapContainer
-        center={defaultCenter as [number, number]}
-        zoom={16}
-        className="w-full h-full"
-        zoomControl={false}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    <div style={{ width: '100%', height: '100%' }}>
+      <MapContainer center={center} zoom={17} className="w-full h-full" zoomControl={false} attributionControl={false}>
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19} />
+        <MarkersLayer
+          pois={pois} activePoi={activePoi} userLocation={userLocation}
+          bearing={userLocation?.bearing ?? 0} language={currentLanguage}
+          onMarkerClick={onMarkerClick}
         />
-
-        {userLocation && (
-          <>
-            <MapUpdater location={userLocation} />
-            <Marker position={[userLocation.latitude, userLocation.longitude]} icon={userIcon}>
-              <Popup>{currentLanguage === 'vi' ? 'Bạn đang ở đây' : 'You are here'}</Popup>
-            </Marker>
-          </>
-        )}
-
-        {pois.map((poi) => {
-          const isActive = activePoi?.id === poi.id;
-          const localized = poi.localizedData?.find(l => l.langCode === currentLanguage) ?? poi.localizedData?.[0];
-          return (
-            <Marker
-              key={poi.id}
-              position={[poi.position.lat, poi.position.lng]}
-              icon={isActive ? activePoiIcon : poiIcon}
-              eventHandlers={{ click: () => onMarkerClick(poi) }}
-            >
-              <Popup>
-                <div className="min-w-[140px]">
-                  <div className="font-semibold">{localized?.name || 'POI'}</div>
-                  <div className="text-xs text-gray-500">{localized?.description || localized?.descriptionText || ''}</div>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
       </MapContainer>
     </div>
   );
