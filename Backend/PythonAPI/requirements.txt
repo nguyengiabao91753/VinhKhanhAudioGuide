@@ -6,3 +6,4 @@ openai-whisper
 piper-tts==1.4.1
 python-dotenv==1.0.0
 setuptools>=40.0.0
+pathvalidate

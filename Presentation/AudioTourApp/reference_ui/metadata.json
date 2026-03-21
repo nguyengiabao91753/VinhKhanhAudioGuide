@@ -1,0 +1,7 @@
+{
+  "name": "AutoNarration",
+  "description": "A GPS-based auto-narration app that plays audio when you are near Points of Interest.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
