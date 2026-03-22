@@ -6,6 +6,7 @@
  * - Route mode toggle (click-map vs auto-POI)
  */
 import { useRef } from 'react';
+import { t } from '../shared/i18n';
 import { Trash2, Navigation, Footprints, RotateCcw, MapPin, ChevronRight } from 'lucide-react';
 
 export interface Waypoint {
@@ -16,7 +17,7 @@ export interface Waypoint {
 }
 
 interface Props {
-  language: 'vi' | 'en';
+  language: string;
   speed: number;           // m/s
   onSpeedChange: (v: number) => void;
   waypoints: Waypoint[];
@@ -47,7 +48,7 @@ export default function SimulationSidebar({
   isPickingWaypoints, onTogglePicking,
   currentLeg, totalDistance,
 }: Props) {
-  const vi = language === 'vi';
+  // i18n handled by t()
   const sliderRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -71,10 +72,10 @@ export default function SimulationSidebar({
         </div>
         <div>
           <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>
-            {vi ? 'Mô phỏng đi bộ' : 'Walk Simulation'}
+            {t(language,'sim.title')}
           </p>
           <p style={{ margin: 0, fontSize: 10, color: '#64748b' }}>
-            {vi ? 'Cấu hình đường đi' : 'Configure route'}
+            {t(language,'sim.subtitle')}
           </p>
         </div>
       </div>
@@ -83,7 +84,7 @@ export default function SimulationSidebar({
       <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#64748b',
           textTransform: 'uppercase', letterSpacing: 1 }}>
-          {vi ? 'Tốc độ' : 'Speed'}
+          {t(language,'sim.speed')}
         </p>
         {/* Preset chips */}
         <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -121,7 +122,7 @@ export default function SimulationSidebar({
       <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
         <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#64748b',
           textTransform: 'uppercase', letterSpacing: 1 }}>
-          {vi ? 'Đường đi (Waypoints)' : 'Route (Waypoints)'}
+          {t(language,'sim.waypoints')}
         </p>
         <button onClick={onTogglePicking} style={{
           width: '100%', height: 36, borderRadius: 10, border: 'none',
@@ -136,12 +137,12 @@ export default function SimulationSidebar({
         }}>
           <MapPin size={14} />
           {isPickingWaypoints
-            ? (vi ? '✓ Đang chọn điểm...' : '✓ Picking points...')
-            : (vi ? 'Click map để thêm điểm' : 'Click map to add points')}
+            ? (t(language,'sim.picking'))
+            : (t(language,'sim.pick_btn'))}
         </button>
         {isPickingWaypoints && (
           <p style={{ margin: '6px 0 0', fontSize: 10, color: '#3b82f6', textAlign: 'center' }}>
-            {vi ? 'Tap vào bản đồ để thêm waypoint' : 'Tap the map to add waypoints'}
+            {t(language,'sim.pick_hint')}
           </p>
         )}
       </div>
@@ -152,7 +153,7 @@ export default function SimulationSidebar({
           <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <Navigation size={28} color="#334155" style={{ margin: '0 auto 8px' }} />
             <p style={{ fontSize: 12, color: '#475569', margin: 0 }}>
-              {vi ? 'Chưa có waypoint nào.\nThêm bằng cách click bản đồ.' : 'No waypoints yet.\nClick the map to add.'}
+              {t(language,'sim.no_waypoints')}
             </p>
           </div>
         ) : (
@@ -163,7 +164,7 @@ export default function SimulationSidebar({
               <div style={{ textAlign: 'center' }}>
                 <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#60a5fa' }}>{waypoints.length}</p>
                 <p style={{ margin: 0, fontSize: 9, color: '#475569', textTransform: 'uppercase' }}>
-                  {vi ? 'Điểm' : 'Points'}
+                  {t(language,'sim.points')}
                 </p>
               </div>
               <div style={{ textAlign: 'center' }}>
@@ -171,7 +172,7 @@ export default function SimulationSidebar({
                   {fmtDist(totalDistance)}
                 </p>
                 <p style={{ margin: 0, fontSize: 9, color: '#475569', textTransform: 'uppercase' }}>
-                  {vi ? 'Tổng' : 'Total'}
+                  {t(language,'sim.total')}
                 </p>
               </div>
               <div style={{ textAlign: 'center' }}>
@@ -179,7 +180,7 @@ export default function SimulationSidebar({
                   {Math.min(currentLeg + 1, waypoints.length)}/{waypoints.length}
                 </p>
                 <p style={{ margin: 0, fontSize: 9, color: '#475569', textTransform: 'uppercase' }}>
-                  {vi ? 'Chặng' : 'Leg'}
+                  {t(language,'sim.leg')}
                 </p>
               </div>
             </div>
@@ -214,7 +215,7 @@ export default function SimulationSidebar({
                     </p>
                     {isActive && (
                       <p style={{ margin: 0, fontSize: 9, color: '#3b82f6' }}>
-                        {vi ? '▶ Đang đến...' : '▶ Heading here...'}
+                        {t(language,'sim.heading')}
                       </p>
                     )}
                   </div>
@@ -243,7 +244,7 @@ export default function SimulationSidebar({
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}>
             <RotateCcw size={13} />
-            {vi ? 'Xóa tất cả waypoints' : 'Clear all waypoints'}
+            {t(language,'sim.clear')}
           </button>
         </div>
       )}

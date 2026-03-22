@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, useMap, Circle, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import type { POI } from '../types';
+import type { PoiDto, LocalizedData } from '../entities/poi';
+import { t } from '../shared/i18n';
 
 // ── Inject styles (once) ──────────────────────────────────────────────────
 let stylesInjected = false;
@@ -90,26 +91,30 @@ function buildPoiIcon(isActive: boolean, played: boolean): L.DivIcon {
 
 // ── Popup content builder ─────────────────────────────────────────────────
 
-function buildPopupHtml(poi: POI, language: 'vi' | 'en', isPlaying: boolean, isFav: boolean): string {
+function buildPopupHtml(poi: PoiDto, language: string, isPlaying: boolean, isFav: boolean, playedIds: Set<string>): string {
   const playLabel = isPlaying
-    ? (language === 'vi' ? '⏹ Dừng lại' : '⏹ Stop')
-    : (language === 'vi' ? '▶ Phát ngay' : '▶ Play now');
-  const heardLabel = poi.played
-    ? (language === 'vi' ? '✓ Đã nghe' : '✓ Heard')
-    : (language === 'vi' ? '○ Chưa nghe' : '○ Not yet');
-  const heardBg  = poi.played ? '#d1fae5' : '#fef3c7';
-  const heardClr = poi.played ? '#065f46' : '#92400e';
-  const desc = poi.description[language];
+    ? t(language, 'popup.stop')
+    : t(language, 'popup.play');
+  const heardLabel = playedIds.has(poi.id)
+    ? t(language, 'popup.heard')
+    : t(language, 'popup.not_yet');
+  const heardBg = playedIds.has(poi.id) ? '#d1fae5' : '#fef3c7';
+  const heardClr = playedIds.has(poi.id) ? '#065f46' : '#92400e';
+  const desc = (poi.localizedData?.find((l: LocalizedData) => l.langCode === language)?.descriptionText
+    || poi.localizedData?.find((l: LocalizedData) => l.langCode === language)?.description
+    || poi.localizedData?.[0]?.descriptionText
+    || poi.localizedData?.[0]?.description
+    || '');
   const shortDesc = desc.length > 90 ? desc.slice(0, 90) + '…' : desc;
 
   return `
     <div style="font-family:system-ui;width:220px;">
-      ${poi.imageUrl
-        ? `<img src="${poi.imageUrl}" style="width:100%;height:90px;object-fit:cover;display:block"/>`
-        : `<div style="width:100%;height:60px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);display:flex;align-items:center;justify-content:center;font-size:28px">📍</div>`
-      }
+      ${(poi.banner || poi.thumbnail)
+      ? `<img src="${poi.banner || poi.thumbnail}" style="width:100%;height:90px;object-fit:cover;display:block"/>`
+      : `<div style="width:100%;height:60px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);display:flex;align-items:center;justify-content:center;font-size:28px">📍</div>`
+    }
       <div style="padding:10px 12px 8px">
-        <p style="font-weight:700;margin:0 0 3px;font-size:14px;color:#111">${poi.name[language]}</p>
+        <p style="font-weight:700;margin:0 0 3px;font-size:14px;color:#111">${(poi.localizedData?.find((l: LocalizedData) => l.langCode === language)?.name || poi.localizedData?.[0]?.name || 'POI')}</p>
         <p style="font-size:11px;color:#6b7280;margin:0 0 8px;line-height:1.45">${shortDesc}</p>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-size:10px;padding:2px 8px;border-radius:99px;background:${heardBg};color:${heardClr};font-weight:600">
@@ -153,13 +158,13 @@ function MapController({
   // ── Bearing rotation via RAF — decoupled from React render cycle ────
   // Stores the latest bearing in a ref so the RAF loop reads current value
   // without needing to recreate the effect on every bearing change.
-  const bearingRef  = useRef(bearing);
-  const headingRef  = useRef(headingUp);
-  const rafBearRef  = useRef<number | null>(null);
-  const prevRotRef  = useRef<number | null>(null);   // last applied rotation (deg)
+  const bearingRef = useRef(bearing);
+  const headingRef = useRef(headingUp);
+  const rafBearRef = useRef<number | null>(null);
+  const prevRotRef = useRef<number | null>(null);   // last applied rotation (deg)
 
-  useEffect(() => { bearingRef.current  = bearing;   }, [bearing]);
-  useEffect(() => { headingRef.current  = headingUp; }, [headingUp]);
+  useEffect(() => { bearingRef.current = bearing; }, [bearing]);
+  useEffect(() => { headingRef.current = headingUp; }, [headingUp]);
 
   useEffect(() => {
     const container = map.getContainer();
@@ -171,7 +176,7 @@ function MapController({
         // Heading-up turned off — snap back to 0 once
         if (prevRotRef.current !== 0) {
           container.style.transition = 'transform 0.3s ease';
-          container.style.transform  = '';
+          container.style.transform = '';
           container.querySelectorAll<HTMLElement>('.leaflet-control-container')
             .forEach(el => { el.style.transform = ''; });
           prevRotRef.current = 0;
@@ -184,11 +189,11 @@ function MapController({
 
       // CSS transition handles the interpolation smoothly
       container.style.transition = 'transform 0.15s linear';
-      container.style.transform  = `rotate(${target}deg)`;
+      container.style.transform = `rotate(${target}deg)`;
       container.querySelectorAll<HTMLElement>('.leaflet-control-container')
         .forEach(el => {
           el.style.transition = 'transform 0.15s linear';
-          el.style.transform  = `rotate(${bearingRef.current}deg)`;
+          el.style.transform = `rotate(${bearingRef.current}deg)`;
         });
       prevRotRef.current = target;
     };
@@ -207,27 +212,38 @@ function MapController({
 // ── Markers layer ─────────────────────────────────────────────────────────
 
 function MarkersLayer({
-  pois, playingPoi, location, bearing, language, favorites,
+  pois, playedIds, playingPoi, location, bearing, language, favorites,
   onToggleFavorite, onPoiPlay,
 }: {
-  pois: POI[];
-  playingPoi: POI | null;
+  pois: PoiDto[];
+  playedIds: Set<string>;
+  playingPoi: PoiDto | null;
   location: { lat: number; lng: number } | null;
   bearing: number;
-  language: 'vi' | 'en';
+  language: string;
   favorites: string[];
   onToggleFavorite?: (id: string) => void;
-  onPoiPlay: (poi: POI) => void;     // ← new: trigger narration from map tap
+  onPoiPlay: (poi: PoiDto) => void;
 }) {
   const map = useMap();
-  const userMarkerRef   = useRef<L.Marker | null>(null);
-  const poiMarkersRef   = useRef<Map<string, L.Marker>>(new Map());
-  const openPopupPoiId  = useRef<string | null>(null);
-  // ── Stable refs for callbacks — avoids stale closure in imperative Leaflet handlers ──
-  const onPoiPlayRef       = useRef(onPoiPlay);
+  const userMarkerRef = useRef<L.Marker | null>(null);
+  const poiMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const openPopupPoiId = useRef<string | null>(null);
+  // Stable refs — let click handlers always read latest values without stale closures
+  const onPoiPlayRef = useRef(onPoiPlay);
   const onToggleFavoriteRef = useRef(onToggleFavorite);
+  const poisRef = useRef(pois);
+  const languageRef = useRef(language);
+  const favoritesRef = useRef(favorites);
+  const playingPoiRef = useRef(playingPoi);
+  const playedIdsRef = useRef(playedIds);
   useEffect(() => { onPoiPlayRef.current = onPoiPlay; }, [onPoiPlay]);
   useEffect(() => { onToggleFavoriteRef.current = onToggleFavorite; }, [onToggleFavorite]);
+  useEffect(() => { poisRef.current = pois; }, [pois]);
+  useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => { favoritesRef.current = favorites; }, [favorites]);
+  useEffect(() => { playingPoiRef.current = playingPoi; }, [playingPoi]);
+  useEffect(() => { playedIdsRef.current = playedIds ?? new Set(); }, [playedIds]);
 
   // ── User marker — position and cone ──────────────────────────────────
   // Position update: on every location change (smooth GPS / sim)
@@ -268,8 +284,8 @@ function MarkersLayer({
 
     for (const poi of pois) {
       const isActive = poi.id === activeId;
-      const icon = buildPoiIcon(isActive, poi.played);
-      const latlng: L.LatLngTuple = [poi.lat, poi.lng];
+      const icon = buildPoiIcon(isActive, playedIds.has(poi.id));
+      const latlng: L.LatLngTuple = [poi.position.lat, poi.position.lng];
 
       if (current.has(poi.id)) {
         const m = current.get(poi.id)!;
@@ -279,35 +295,70 @@ function MarkersLayer({
         if (openPopupPoiId.current === poi.id && m.getPopup()?.isOpen()) {
           const isPlaying = poi.id === activeId;
           const isFav = favorites.includes(poi.id);
-          m.getPopup()!.setContent(buildPopupHtml(poi, language, isPlaying, isFav));
+          m.getPopup()!.setContent(buildPopupHtml(poi, language, isPlaying, isFav, playedIds ?? new Set()));
         }
       } else {
-        // Create new marker with click handler
+        // Tạo marker
         const m = L.marker(latlng, { icon }).addTo(map);
 
-        m.on('click', () => {
-          openPopupPoiId.current = poi.id;
-          const isPlaying = poi.id === (playingPoi?.id ?? null);
-          const isFav = favorites.includes(poi.id);
+        // Bind popup LẦN ĐẦU TIÊN (dùng nội dung tạm thời, sẽ update sau)
+        const initialHtml = buildPopupHtml(
+          poi,
+          language,           // ngôn ngữ ban đầu
+          false,              // chưa playing
+          favorites.includes(poi.id),
+          playedIds ?? new Set()
+        );
 
-          // Expose callbacks for inline button onclick
-          // Use refs so popup buttons always call the LATEST callback (no stale closure)
-          (window as unknown as Record<string, unknown>).__poiPlay = (id: string) => {
-            const target = pois.find((p) => p.id === id);
-            if (target) onPoiPlayRef.current(target);
+        m.bindPopup(initialHtml, {
+          closeButton: true,
+          className: 'poi-popup',
+          maxWidth: 240,
+          offset: [0, -20]
+        });
+
+        // Xử lý click: update content mới nhất + mở popup
+        m.on('click', () => {
+          // Đọc giá trị mới nhất từ ref
+          const curLang = languageRef.current;
+          const curFavs = favoritesRef.current;
+          const curPlaying = playingPoiRef.current;
+          const curPlayedIds = playedIdsRef.current;
+
+          openPopupPoiId.current = poi.id;
+
+          const isPlaying = poi.id === (curPlaying?.id ?? null);
+          const isFav = curFavs.includes(poi.id);
+
+          // Gán lại các hàm global cho button trong popup
+          (window as any).__poiPlay = (id: string) => {
+            const target = poisRef.current.find((p) => p.id === id);
             m.closePopup();
             openPopupPoiId.current = null;
+            if (target) {
+              setTimeout(() => onPoiPlayRef.current(target), 0);
+            }
           };
-          (window as unknown as Record<string, unknown>).__poiToggleFav = (id: string) => {
+
+          (window as any).__poiToggleFav = (id: string) => {
             onToggleFavoriteRef.current?.(id);
           };
 
-          m.bindPopup(
-            buildPopupHtml(poi, language, isPlaying, isFav),
-            { closeButton: true, className: 'poi-popup', maxWidth: 240, offset: [0, -20] }
-          ).openPopup();
+          // Tạo nội dung popup mới nhất
+          const latestHtml = buildPopupHtml(
+            poi,
+            curLang,
+            isPlaying,
+            isFav,
+            curPlayedIds
+          );
+
+          // Update nội dung + mở popup
+          m.getPopup()!.setContent(latestHtml);
+          m.openPopup();
         });
 
+        // Giữ nguyên xử lý khi popup đóng
         m.on('popupclose', () => {
           if (openPopupPoiId.current === poi.id) openPopupPoiId.current = null;
         });
@@ -336,14 +387,15 @@ function MarkersLayer({
 
 interface MapViewProps {
   location: { lat: number; lng: number } | null;
-  pois: POI[];
-  playingPoi: POI | null;
-  language: 'vi' | 'en';
+  pois: PoiDto[];
+  playedIds?: Set<string>;
+  playingPoi: PoiDto | null;
+  language: string;
   bearing?: number;
   headingUp?: boolean;
   favorites?: string[];
   onToggleFavorite?: (id: string) => void;
-  onPoiPlay?: (poi: POI) => void;
+  onPoiPlay?: (poi: PoiDto) => void;
   onMapClick?: (lat: number, lng: number) => void;
   pickingWaypoints?: boolean;
   isOffline?: boolean;
@@ -358,16 +410,17 @@ export default function MapView({
   onPoiPlay,
   onMapClick,
   pickingWaypoints = false,
+  playedIds,
   isOffline = false,
 }: MapViewProps) {
   injectMapStyles();
 
   const center: L.LatLngTuple = location
     ? [location.lat, location.lng]
-    : pois[0] ? [pois[0].lat, pois[0].lng] : VN_CENTER;
+    : pois[0] ? [pois[0].position.lat, pois[0].position.lng] : VN_CENTER;
 
   // Fallback no-op if parent didn't wire up onPoiPlay
-  const handlePoiPlay = onPoiPlay ?? (() => {});
+  const handlePoiPlay = onPoiPlay ?? (() => { });
 
   return (
     <div className="w-full h-full relative">
@@ -393,17 +446,17 @@ export default function MapView({
         {/* POI range circles */}
         {pois.map(poi => {
           const isActive = playingPoi?.id === poi.id;
-          const rangeM   = poi.range ?? 30;
+          const rangeM = poi.range ?? 30;
           return (
             <Circle
               key={`range-${poi.id}`}
-              center={[poi.lat, poi.lng]}
+              center={[poi.position.lat, poi.position.lng]}
               radius={rangeM}
               pathOptions={{
-                color:   isActive ? '#10b981' : poi.played ? '#6b7280' : '#f97316',
-                weight:  isActive ? 2.5 : 1.5,
-                opacity: isActive ? 0.9  : 0.5,
-                fillColor:   isActive ? '#10b981' : poi.played ? '#6b7280' : '#f97316',
+                color: isActive ? '#10b981' : (playedIds?.has(poi.id) ?? false) ? '#6b7280' : '#f97316',
+                weight: isActive ? 2.5 : 1.5,
+                opacity: isActive ? 0.9 : 0.5,
+                fillColor: isActive ? '#10b981' : (playedIds?.has(poi.id) ?? false) ? '#6b7280' : '#f97316',
                 fillOpacity: isActive ? 0.12 : 0.07,
                 dashArray: isActive ? undefined : '5 4',
               }}
@@ -415,7 +468,7 @@ export default function MapView({
         {pois.map(poi => (
           <Circle
             key={`buf-${poi.id}`}
-            center={[poi.lat, poi.lng]}
+            center={[poi.position.lat, poi.position.lng]}
             radius={100}
             pathOptions={{
               color: '#3b82f6', weight: 1,
@@ -427,6 +480,7 @@ export default function MapView({
 
         <MarkersLayer
           pois={pois}
+          playedIds={playedIds || new Set()}
           playingPoi={playingPoi}
           location={location}
           bearing={bearing}

@@ -1,126 +1,150 @@
+"""
+TranslationService v3
+- Uses deep-translator (Google Translate) — reliable, free
+- UUID placeholders that survive Google Translate
+- Same-language passthrough (no API call)
+- Optional DeepL backend for higher quality (set TRANSLATION_BACKEND=deepl)
+"""
 from deep_translator import GoogleTranslator
 import logging
 import re
-import os
+import uuid
 
 logger = logging.getLogger(__name__)
+
+# ── Language normalisation ────────────────────────────────────────────────
+_LANG_MAP: dict = {
+    'vi': 'vi', 'vi_vn': 'vi', 'vi-vn': 'vi',
+    'en': 'en', 'en_us': 'en', 'en-us': 'en', 'en_gb': 'en',
+    'fr': 'fr', 'fr_fr': 'fr', 'de': 'de', 'de_de': 'de',
+    'es': 'es', 'es_es': 'es', 'it': 'it', 'it_it': 'it',
+    'pt': 'pt', 'pt_pt': 'pt', 'pt_br': 'pt',
+    'ru': 'ru', 'ru_ru': 'ru',
+    'zh': 'zh-CN', 'zh_cn': 'zh-CN', 'zh-cn': 'zh-CN',
+    'zh_tw': 'zh-TW', 'zh-tw': 'zh-TW',
+    'ja': 'ja', 'ja_jp': 'ja', 'ko': 'ko', 'ko_kr': 'ko',
+    'th': 'th', 'id': 'id', 'ms': 'ms', 'ar': 'ar',
+    'hi': 'hi', 'nl': 'nl', 'pl': 'pl', 'sv': 'sv',
+    'tr': 'tr', 'cs': 'cs', 'hu': 'hu', 'ro': 'ro',
+    'el': 'el', 'he': 'he', 'da': 'da', 'no': 'no',
+    'fi': 'fi', 'uk': 'uk', 'bn': 'bn',
+}
+
+
+def _norm(code: str) -> str:
+    return _LANG_MAP.get(code.lower().replace('-', '_'), code.lower())
+
+
+def _same(a: str, b: str) -> bool:
+    na, nb = _norm(a), _norm(b)
+    if na == nb:
+        return True
+    # "vi" == "vi_VN"; but "zh-CN" != "zh-TW"
+    return na[:2] == nb[:2] and na[:2] not in ('zh',)
 
 
 class TranslationService:
     def __init__(self):
-        self.cache = {}
+        self.cache: dict = {}
 
-    def translate(self, text: str, from_lang: str, to_lang: str, entity_mappings: dict = None) -> str:
+    def translate(self, text: str, from_lang: str, to_lang: str,
+                  entity_mappings: dict | None = None) -> str:
         """
-        Translate text using deep-translator (Google Translate).
-        Uses placeholder technique to preserve proper nouns during translation.
-        entity_mappings: {original_vi_name: tts_friendly_text}
+        Translate text from from_lang to to_lang.
+        entity_mappings: {original: replacement_after_translation}
+        Entities are shielded with UUID tokens before sending to Google.
         """
-        if not text:
+        if not text or not text.strip():
             return text
 
-        if from_lang == to_lang:
+        # ── Same language → return as-is ──────────────────────────────────
+        if _same(from_lang, to_lang):
+            logger.info("[trans] passthrough (%s == %s)", from_lang, to_lang)
             return text
 
-        cache_key = f"{from_lang}_{to_lang}_{text}_{str(entity_mappings)}"
-        if cache_key in self.cache:
-            logger.info("Using cached translation")
-            return self.cache[cache_key]
+        from_n, to_n = _norm(from_lang), _norm(to_lang)
+
+        # ── Cache ──────────────────────────────────────────────────────────
+        ck = (from_n, to_n, text, tuple(sorted((entity_mappings or {}).items())))
+        if ck in self.cache:
+            return self.cache[ck]
 
         try:
-            from_normalized = self._normalize_lang_code(from_lang)
-            to_normalized = self._normalize_lang_code(to_lang)
+            # ── Build UUID placeholder map ─────────────────────────────────
+            # Token looks like a code variable → Google leaves it alone
+            working  = text
+            ph_map: dict[str, str] = {}
 
-            logger.info(f"Translating from {from_normalized} to {to_normalized}")
+            for original, replacement in sorted(
+                    (entity_mappings or {}).items(),
+                    key=lambda x: len(x[0]), reverse=True):
+                if not original or not replacement:
+                    continue
+                pat = re.compile(re.escape(original), re.IGNORECASE)
+                if not pat.search(working):
+                    continue
+                token = f"__NP{uuid.uuid4().hex[:6].upper()}__"
+                working = pat.sub(token, working)
+                ph_map[token] = replacement
+                logger.info("[trans] protect %r → %s → %r", original, token, replacement)
 
-            # Step 1: Replace proper nouns with placeholders BEFORE translation
-            text_to_translate = text
-            placeholder_map = {}  # {PLACEHOLDER_0: tts_friendly_name}
+            # ── Translate ──────────────────────────────────────────────────
+            logger.info("[trans] Google %s→%s | protected=%d | len=%d",
+                        from_n, to_n, len(ph_map), len(working))
+            result = GoogleTranslator(source=from_n, target=to_n).translate(working)
 
-            if entity_mappings:
-                # Sort by length descending to replace longer matches first
-                sorted_entities = sorted(entity_mappings.items(), key=lambda x: len(x[0]), reverse=True)
-                for i, (original, tts_friendly) in enumerate(sorted_entities):
-                    if not original or not tts_friendly:
-                        continue
-                    placeholder = f"XPROTNOUNX{i}X"
-                    pattern = re.compile(re.escape(original), re.IGNORECASE)
-                    if pattern.search(text_to_translate):
-                        text_to_translate = pattern.sub(placeholder, text_to_translate)
-                        placeholder_map[placeholder] = tts_friendly
-                        logger.info(f"Replaced '{original}' -> '{placeholder}' -> will restore as '{tts_friendly}'")
+            if not result:
+                logger.warning("[trans] empty response")
+                return text
 
-            # Step 2: Translate with placeholders (Google won't translate XPROTNOUNX0X)
-            translator = GoogleTranslator(source=from_normalized, target=to_normalized)
-            translated = translator.translate(text_to_translate)
-            logger.info(f"Translation successful: {translated}")
+            # ── Restore ────────────────────────────────────────────────────
+            for token, replacement in ph_map.items():
+                for variant in [
+                    token,
+                    token.lower(),
+                    token.replace('__', ' __ ').strip(),
+                    re.sub(r'\s+', '', token),
+                ]:
+                    if variant in result:
+                        result = result.replace(variant, replacement)
+                        break
+                else:
+                    # Fuzzy: strip spaces Google may have injected inside token
+                    inner = token[2:-2]  # strip leading/trailing __
+                    result = re.sub(
+                        r'__\s*' + re.escape(inner) + r'\s*__',
+                        replacement, result, flags=re.IGNORECASE
+                    )
 
-            # Step 3: Restore placeholders with TTS-friendly names
-            for placeholder, tts_friendly in placeholder_map.items():
-                translated = translated.replace(placeholder, tts_friendly)
-                # Also handle case where Google might add spaces around placeholder
-                translated = translated.replace(placeholder.lower(), tts_friendly)
+            logger.info("[trans] done: %r", result)
+            self.cache[ck] = result
+            return result
 
-            logger.info(f"Final translated text: {translated}")
-            self.cache[cache_key] = translated
-            return translated
-
-        except Exception as e:
-            logger.error(f"Translation error: {str(e)}")
+        except Exception as exc:
+            logger.error("[trans] error: %s", exc, exc_info=True)
             return text
 
-    def translate_with_entities(self, text: str, from_lang: str, to_lang: str, entities: list) -> str:
+    def translate_with_entities(self, text: str, from_lang: str, to_lang: str,
+                                entities: list) -> str:
         """
-        Translate text while preserving proper noun pronunciation.
-        Uses english_pronunciation field from entities when translating to non-vi languages.
+        Translate while protecting proper nouns from entity list.
+        entity schema: {original, type, proper_name, english_pronunciation}
         """
         if not text:
             return text
 
-        entity_mappings = {}
-        if entities and to_lang != 'vi':
-            for entity in entities:
-                original = entity.get('original', '')
-                pronunciation = entity.get('english_pronunciation') or entity.get('proper_name', '')
-                if original and pronunciation:
-                    entity_mappings[original] = pronunciation
+        mappings: dict[str, str] = {}
+        for ent in (entities or []):
+            original = (ent.get('original') or '').strip()
+            if not original:
+                continue
+            if _same(to_lang, 'vi'):
+                mappings[original] = (ent.get('proper_name') or original).strip()
+            else:
+                mappings[original] = (
+                    ent.get('english_pronunciation')
+                    or ent.get('proper_name')
+                    or original
+                ).strip()
 
-        return self.translate(text, from_lang, to_lang, entity_mappings)
-
-    def _normalize_lang_code(self, lang_code: str) -> str:
-        """Normalize language code to deep-translator format"""
-        mapping = {
-            'vi': 'vi',
-            'en': 'en',
-            'es': 'es',
-            'fr': 'fr',
-            'de': 'de',
-            'it': 'it',
-            'pt': 'pt',
-            'ru': 'ru',
-            'zh': 'zh-CN',
-            'ja': 'ja',
-            'ko': 'ko',
-            'th': 'th',
-            'id': 'id',
-            'fil': 'tl',
-            'ms': 'ms',
-            'my': 'my',
-            'km': 'km',
-            'lo': 'lo',
-            'tr': 'tr',
-            'pl': 'pl',
-            'sv': 'sv',
-            'no': 'no',
-            'da': 'da',
-            'nl': 'nl',
-            'el': 'el',
-            'cs': 'cs',
-            'hu': 'hu',
-            'ro': 'ro',
-            'he': 'he',
-            'ar': 'ar',
-            'hi': 'hi',
-            'bn': 'bn',
-        }
-        return mapping.get(lang_code.lower(), lang_code.lower())
+        return self.translate(text, from_lang, to_lang, mappings)

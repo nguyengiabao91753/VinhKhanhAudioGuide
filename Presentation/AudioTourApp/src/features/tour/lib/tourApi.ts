@@ -2,8 +2,8 @@ import type { LocalizedData } from '../../../entities/poi';
 import type { TourDto } from '../../../entities/tour';
 import { apiGet } from '../../../shared/lib/apiClient';
 
-const FALLBACK_TOUR_THUMB = 'https://via.placeholder.com/300?text=Tour';
-const FALLBACK_TOUR_BANNER = 'https://via.placeholder.com/900x400?text=Tour+Banner';
+const FALLBACK_TOUR_THUMB = '';
+const FALLBACK_TOUR_BANNER = '';
 
 type RawTour = Record<string, unknown>;
 
@@ -103,7 +103,7 @@ export async function fetchTours(): Promise<TourDto[]> {
     return list.map((item) => normalizeTourDto(item as RawTour));
   } catch (err) {
     console.log('Tours API unavailable, using mock data.', err);
-    return getMockTours().map((item) => normalizeTourDto(item as RawTour));
+    return getMockTours().map((item) => normalizeTourDto(item as unknown as RawTour));
   }
 }
 
@@ -131,8 +131,8 @@ function getMockTours(): TourDto[] {
       description: 'Khám phá con phố ốc nổi tiếng nhất Sài Gòn với những quán hải sản tươi ngon, nhộn nhịp về đêm.',
       duration: 60,
       distance: 1.2,
-      thumbnail: 'https://via.placeholder.com/200?text=Tour+1',
-      banner: 'https://via.placeholder.com/800x400?text=Oc+Vinh+Khanh+Banner',
+      thumbnail: '',
+      banner: '',
       poiIds: ['poi-1', 'poi-2', 'poi-3'],
       localizedData: [
         {
