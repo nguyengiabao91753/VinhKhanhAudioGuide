@@ -1,16 +1,18 @@
 import { X, Heart, Map as MapIcon, Download, CheckCircle, Trash2 } from 'lucide-react';
-import type { POI, Tour } from '../types';
+import type { PoiDto } from '../entities/poi';
+import { t } from '../shared/i18n';
+import type { Tour } from '../types';
 
 interface MenuOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   activeTab: 'tours' | 'favorites' | 'offline';
   setActiveTab: (tab: 'tours' | 'favorites' | 'offline') => void;
-  language: 'vi' | 'en';
+  language: string;
   tours: Tour[];
   selectedTour: Tour | null;
   onSelectTour: (tour: Tour | null) => void;
-  pois: POI[];
+  pois: PoiDto[];
   favorites: string[];
   onToggleFavorite: (poiId: string) => void;
   isOffline: boolean;
@@ -34,7 +36,7 @@ export default function MenuOverlay({
     <div className="fixed inset-0 z-[2000] bg-white flex flex-col">
       <div className="flex items-center justify-between p-4 border-b border-gray-100">
         <h2 className="text-xl font-bold text-gray-900">
-          {language === 'vi' ? 'Menu' : 'Menu'}
+          {t(language,'menu.title')}
         </h2>
         <button onClick={onClose} className="p-2 bg-gray-100 rounded-full text-gray-600 hover:bg-gray-200">
           <X size={24} />
@@ -46,19 +48,19 @@ export default function MenuOverlay({
           onClick={() => setActiveTab('tours')}
           className={`flex-1 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 ${activeTab === 'tours' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
         >
-          <MapIcon size={16} /> {language === 'vi' ? 'Tours' : 'Tours'}
+          <MapIcon size={16} /> {t(language,'menu.tours')}
         </button>
         <button
           onClick={() => setActiveTab('favorites')}
           className={`flex-1 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 ${activeTab === 'favorites' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
         >
-          <Heart size={16} /> {language === 'vi' ? 'Yêu thích' : 'Favorites'}
+          <Heart size={16} /> {t(language,'menu.favorites')}
         </button>
         <button
           onClick={() => setActiveTab('offline')}
           className={`flex-1 py-2 rounded-xl font-medium text-sm flex items-center justify-center gap-2 ${activeTab === 'offline' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500'}`}
         >
-          <Download size={16} /> {language === 'vi' ? 'Ngoại tuyến' : 'Offline'}
+          <Download size={16} /> {t(language,'menu.offline')}
         </button>
       </div>
 
@@ -70,7 +72,7 @@ export default function MenuOverlay({
                 onClick={() => onSelectTour(null)}
                 className="w-full py-3 border-2 border-dashed border-gray-300 rounded-2xl text-gray-500 font-medium hover:bg-gray-100 transition-colors"
               >
-                {language === 'vi' ? 'Xóa chọn Tour (Xem tất cả)' : 'Clear Tour Selection (View All)'}
+                {t(language,'menu.clear_tour')}
               </button>
             )}
             {tours.map(tour => (
@@ -80,13 +82,13 @@ export default function MenuOverlay({
                 className={`bg-white rounded-3xl overflow-hidden shadow-sm border-2 cursor-pointer transition-all ${selectedTour?.id === tour.id ? 'border-blue-500' : 'border-transparent'}`}
               >
                 {tour.imageUrl && (
-                  <img src={tour.imageUrl} alt={tour.name[language]} className="w-full h-40 object-cover" />
+                  <img src={tour.imageUrl} alt={tour.name[language as 'vi'|'en']} className="w-full h-40 object-cover" />
                 )}
                 <div className="p-4">
-                  <h3 className="font-bold text-lg text-gray-900 mb-1">{tour.name[language]}</h3>
-                  <p className="text-gray-500 text-sm line-clamp-2 mb-3">{tour.description[language]}</p>
+                  <h3 className="font-bold text-lg text-gray-900 mb-1">{tour.name[language as 'vi'|'en']}</h3>
+                  <p className="text-gray-500 text-sm line-clamp-2 mb-3">{tour.description[language as 'vi'|'en']}</p>
                   <div className="text-xs font-semibold text-blue-600 bg-blue-50 inline-block px-3 py-1 rounded-full">
-                    {tour.poiIds.length} {language === 'vi' ? 'địa điểm' : 'locations'}
+                    {tour.poiIds.length} {t(language,'menu.locations')}
                   </div>
                 </div>
               </div>
@@ -99,17 +101,17 @@ export default function MenuOverlay({
             {favoritePois.length === 0 ? (
               <div className="text-center py-10 text-gray-400">
                 <Heart size={48} className="mx-auto mb-3 opacity-20" />
-                <p>{language === 'vi' ? 'Chưa có địa điểm yêu thích nào.' : 'No favorite locations yet.'}</p>
+                <p>{t(language,'menu.no_favorites')}</p>
               </div>
             ) : (
               favoritePois.map(poi => (
                 <div key={poi.id} className="bg-white rounded-2xl p-4 shadow-sm flex gap-4 items-center">
-                  {poi.imageUrl && (
-                    <img src={poi.imageUrl} alt={poi.name[language]} className="w-16 h-16 rounded-xl object-cover" />
+                  {(poi.banner || poi.thumbnail) && (
+                    <img src={(poi.banner || poi.thumbnail)!} alt={poi.localizedData?.find(l=>l.langCode===language)?.name||''} className="w-16 h-16 rounded-xl object-cover" />
                   )}
                   <div className="flex-1">
-                    <h3 className="font-bold text-gray-900">{poi.name[language]}</h3>
-                    <p className="text-xs text-gray-500 line-clamp-1">{poi.description[language]}</p>
+                    <h3 className="font-bold text-gray-900">{poi.localizedData?.find(l=>l.langCode===language)?.name||poi.localizedData?.[0]?.name||''}</h3>
+                    <p className="text-xs text-gray-500 line-clamp-1">{poi.localizedData?.find(l=>l.langCode===language)?.description||poi.localizedData?.[0]?.description||''}</p>
                   </div>
                   <button
                     onClick={() => onToggleFavorite(poi.id)}
@@ -132,17 +134,17 @@ export default function MenuOverlay({
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900 text-lg">
-                    {language === 'vi' ? 'Chế độ Ngoại tuyến' : 'Offline Mode'}
+                    {t(language,'menu.offline_mode')}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {language === 'vi' ? 'Sử dụng app không cần mạng' : 'Use the app without internet'}
+                    {t(language,'menu.offline_desc')}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center justify-between py-4 border-t border-gray-100">
                 <span className="font-medium text-gray-700">
-                  {language === 'vi' ? 'Bật chế độ ngoại tuyến' : 'Enable Offline Mode'}
+                  {t(language,'menu.enable_offline')}
                 </span>
                 <button
                   onClick={onToggleOffline}
@@ -155,14 +157,14 @@ export default function MenuOverlay({
 
               {(!hasDownloadedData && !isOffline) && (
                 <p className="text-xs text-orange-500 mt-2">
-                  {language === 'vi' ? '* Cần tải dữ liệu trước khi bật' : '* Download data before enabling'}
+                  {t(language,'menu.download_note')}
                 </p>
               )}
             </div>
 
             <div className="bg-white rounded-3xl p-6 shadow-sm">
               <h3 className="font-bold text-gray-900 mb-4">
-                {language === 'vi' ? 'Quản lý Dữ liệu' : 'Data Management'}
+                {t(language,'menu.data_mgmt')}
               </h3>
 
               {hasDownloadedData ? (
@@ -170,7 +172,7 @@ export default function MenuOverlay({
                   <div className="flex items-center gap-3 text-emerald-600 bg-emerald-50 p-3 rounded-xl">
                     <CheckCircle size={20} />
                     <span className="text-sm font-medium">
-                      {language === 'vi' ? 'Đã tải dữ liệu khu vực hiện tại' : 'Current area data downloaded'}
+                      {t(language,'menu.data_downloaded')}
                     </span>
                   </div>
                   <button
@@ -178,7 +180,7 @@ export default function MenuOverlay({
                     className="w-full py-3 flex items-center justify-center gap-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-xl font-medium transition-colors"
                   >
                     <Trash2 size={18} />
-                    {language === 'vi' ? 'Xóa dữ liệu đã tải' : 'Clear downloaded data'}
+                    {t(language,'menu.clear_data')}
                   </button>
                 </div>
               ) : (
@@ -187,7 +189,7 @@ export default function MenuOverlay({
                   className="w-full py-4 flex items-center justify-center gap-2 text-white bg-gray-900 hover:bg-gray-800 rounded-xl font-bold transition-colors"
                 >
                   <Download size={20} />
-                  {language === 'vi' ? 'Tải dữ liệu khu vực này' : 'Download this area'}
+                  {t(language,'menu.download_area')}
                 </button>
               )}
             </div>

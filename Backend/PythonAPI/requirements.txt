@@ -1,9 +1,7 @@
-Flask==3.0.0
-Flask-CORS==4.0.0
-requests==2.31.0
-deep-translator==1.11.4
-openai-whisper
-piper-tts==1.4.1
-python-dotenv==1.0.0
-setuptools>=40.0.0
-pathvalidate
+flask>=3.0.0
+flask-cors>=4.0.0
+python-dotenv>=1.0.0
+deep-translator>=1.11.4
+edge-tts>=6.1.9
+openai-whisper>=20231117
+langdetect>=1.0.9

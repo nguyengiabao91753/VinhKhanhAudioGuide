@@ -2,8 +2,8 @@ import { List } from 'lucide-react';
 import type { LocalizedData, PoiDto, Position } from '../../entities/poi';
 import { apiGet } from './apiClient';
 
-const FALLBACK_POI_THUMB = 'https://via.placeholder.com/100?text=POI';
-const FALLBACK_POI_BANNER = 'https://via.placeholder.com/400?text=POI+Banner';
+const FALLBACK_POI_THUMB = '';
+const FALLBACK_POI_BANNER = '';
 const DEFAULT_RANGE_METERS = 30;
 
 type RawPoi = Record<string, unknown>;
@@ -117,8 +117,8 @@ function getMockPois(): PoiDto[] {
       id: 'poi-1',
       order: 1,
       range: 50,
-      thumbnail: 'https://via.placeholder.com/100?text=POI+1',
-      banner: 'https://via.placeholder.com/400?text=POI+1+Banner',
+      thumbnail: '',
+      banner: '',
       position: { type: 'Point', lat: 10.75305, lng: 106.71335 },
       localizedData: [
         { langCode: 'vi', name: 'Ốc Oanh', description: 'Quán ốc...', descriptionText: 'Ốc Oanh', descriptionAudio: '' },

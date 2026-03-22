@@ -1,128 +1,138 @@
-import subprocess
+"""
+TTSService v3 — edge-tts backend (replaces Piper entirely)
+
+Why edge-tts:
+  • No model downloads, no binary dependencies
+  • Microsoft Neural voices — excellent quality for Vietnamese
+  • pip install edge-tts  ← single dependency
+  • Vietnamese: vi-VN-HoaiMyNeural (female) / vi-VN-NamMinhNeural (male)
+  • Supports 80+ languages out of the box
+"""
+import asyncio
+import edge_tts
 import logging
-import os
 import tempfile
+import os
+import io
 
 logger = logging.getLogger(__name__)
 
+# ── Voice registry ────────────────────────────────────────────────────────
+# Keys: lowercase normalised lang codes (with variants)
+# Values: (primary_voice, fallback_voice)
+_VOICES: dict[str, tuple[str, str]] = {
+    # Vietnamese — the main target language
+    'vi':    ('vi-VN-HoaiMyNeural',  'vi-VN-NamMinhNeural'),
+    'vi_vn': ('vi-VN-HoaiMyNeural',  'vi-VN-NamMinhNeural'),
+
+    # English
+    'en':    ('en-US-JennyNeural',   'en-US-GuyNeural'),
+    'en_us': ('en-US-JennyNeural',   'en-US-GuyNeural'),
+    'en_gb': ('en-GB-SoniaNeural',   'en-GB-RyanNeural'),
+
+    # Other languages
+    'fr':    ('fr-FR-DeniseNeural',  'fr-FR-HenriNeural'),
+    'fr_fr': ('fr-FR-DeniseNeural',  'fr-FR-HenriNeural'),
+    'de':    ('de-DE-KatjaNeural',   'de-DE-ConradNeural'),
+    'de_de': ('de-DE-KatjaNeural',   'de-DE-ConradNeural'),
+    'es':    ('es-ES-ElviraNeural',  'es-ES-AlvaroNeural'),
+    'es_es': ('es-ES-ElviraNeural',  'es-ES-AlvaroNeural'),
+    'it':    ('it-IT-ElsaNeural',    'it-IT-DiegoNeural'),
+    'it_it': ('it-IT-ElsaNeural',    'it-IT-DiegoNeural'),
+    'pt':    ('pt-PT-FernandaNeural','pt-PT-DuarteNeural'),
+    'pt_br': ('pt-BR-FranciscaNeural','pt-BR-AntonioNeural'),
+    'ru':    ('ru-RU-SvetlanaNeural','ru-RU-DmitryNeural'),
+    'zh':    ('zh-CN-XiaoxiaoNeural','zh-CN-YunxiNeural'),
+    'zh_cn': ('zh-CN-XiaoxiaoNeural','zh-CN-YunxiNeural'),
+    'zh_tw': ('zh-TW-HsiaoChenNeural','zh-TW-YunJheNeural'),
+    'ja':    ('ja-JP-NanamiNeural',  'ja-JP-KeitaNeural'),
+    'ja_jp': ('ja-JP-NanamiNeural',  'ja-JP-KeitaNeural'),
+    'ko':    ('ko-KR-SunHiNeural',   'ko-KR-InJoonNeural'),
+    'ko_kr': ('ko-KR-SunHiNeural',   'ko-KR-InJoonNeural'),
+    'th':    ('th-TH-PremwadeeNeural','th-TH-NiwatNeural'),
+    'id':    ('id-ID-GadisNeural',   'id-ID-ArdiNeural'),
+    'ms':    ('ms-MY-YasminNeural',  'ms-MY-OsmanNeural'),
+    'ar':    ('ar-SA-ZariyahNeural', 'ar-SA-HamedNeural'),
+    'hi':    ('hi-IN-SwaraNeural',   'hi-IN-MadhurNeural'),
+    'nl':    ('nl-NL-FennaNeural',   'nl-NL-MaartenNeural'),
+    'pl':    ('pl-PL-AgnieszkaNeural','pl-PL-MarekNeural'),
+    'sv':    ('sv-SE-SofieNeural',   'sv-SE-MattiasNeural'),
+    'tr':    ('tr-TR-EmelNeural',    'tr-TR-AhmetNeural'),
+    'cs':    ('cs-CZ-VlastaNeural',  'cs-CZ-AntoninNeural'),
+    'hu':    ('hu-HU-NoemiNeural',   'hu-HU-TamasNeural'),
+    'ro':    ('ro-RO-AlinaNeural',   'ro-RO-EmilNeural'),
+    'el':    ('el-GR-AthinaNeural',  'el-GR-NestorasNeural'),
+    'he':    ('he-IL-HilaNeural',    'he-IL-AvriNeural'),
+    'da':    ('da-DK-ChristelNeural','da-DK-JeppeNeural'),
+    'no':    ('nb-NO-PernilleNeural','nb-NO-FinnNeural'),
+    'fi':    ('fi-FI-NooraNeural',   'fi-FI-HarriNeural'),
+    'uk':    ('uk-UA-PolinaNeural',  'uk-UA-OstapNeural'),
+}
+_DEFAULT_VOICE = 'en-US-JennyNeural'
+
+
+def _get_voice(language_code: str, gender: str = 'female') -> str:
+    """Return the best edge-tts voice name for a given language code."""
+    key = language_code.lower().replace('-', '_')
+    pair = _VOICES.get(key) or _VOICES.get(key[:2])
+    if not pair:
+        logger.warning("[tts] no voice for %r – using default", language_code)
+        return _DEFAULT_VOICE
+    # pair = (female, male)
+    return pair[0] if gender.lower() != 'male' else pair[1]
+
 
 class TTSService:
+    """
+    Text-to-Speech using Microsoft edge-tts (Neural voices, free).
+
+    Usage:
+        svc = TTSService()
+        mp3_bytes = svc.generate("Xin chào", "vi")
+    """
+
     def __init__(self):
-        self.piper_path = os.getenv('PIPER_PATH', 'piper')
-        self.voices_path = os.getenv('PIPER_VOICES_PATH', os.path.join(os.path.expanduser('~'), '.local', 'share', 'piper', 'voices'))
+        # Optional gender preference from env (default: female)
+        self.default_gender = os.getenv('TTS_GENDER', 'female')
 
-    def generate(self, text: str, language_code: str) -> bytes:
+    def generate(self, text: str, language_code: str,
+                 gender: str | None = None) -> bytes | None:
         """
-        Generate audio from text using Piper TTS
-        Returns: WAV audio bytes
+        Generate MP3 audio bytes for *text* in *language_code*.
+        Returns bytes or None on failure.
         """
-        if not text:
+        if not text or not text.strip():
+            logger.warning("[tts] empty text")
             return None
 
-        temp_output = None
+        voice = _get_voice(language_code, gender or self.default_gender)
+        logger.info("[tts] voice=%s | lang=%s | text_len=%d",
+                    voice, language_code, len(text))
+
         try:
-            voice_model = self._get_voice_model(language_code)
-
-            logger.info(f"Generating audio for {language_code} using voice {voice_model}")
-
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-                temp_output = tmp.name
-
-            cmd = [
-                self.piper_path,
-                '--model', voice_model,
-                '--data-dir', self.voices_path,
-                '--output-file', temp_output
-            ]
-
-            logger.info(f"Running Piper command: {' '.join(cmd)}")
-
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=False
-            )
-
-            stdout, stderr = process.communicate(input=text.encode('utf-8'), timeout=120)
-
-            if process.returncode != 0:
-                error_msg = stderr.decode('utf-8', errors='ignore')
-                logger.error(f"Piper TTS failed with return code {process.returncode}: {error_msg}")
-                return None
-
-            if not os.path.exists(temp_output):
-                logger.error(f"Piper output file not created: {temp_output}")
-                return None
-
-            with open(temp_output, 'rb') as f:
-                audio_bytes = f.read()
-
-            if not audio_bytes:
-                logger.error("Piper output file is empty")
-                return None
-
-            logger.info(f"Audio generation successful ({len(audio_bytes)} bytes)")
-            return audio_bytes
-
-        except subprocess.TimeoutExpired:
-            logger.error("Piper TTS timeout (exceeded 120 seconds)")
+            # edge_tts is async → run in a fresh event loop
+            return asyncio.run(self._synthesise(text, voice))
+        except Exception as exc:
+            logger.error("[tts] error: %s", exc, exc_info=True)
             return None
-        except FileNotFoundError as e:
-            logger.error(f"Piper TTS executable not found: {self.piper_path}. Error: {str(e)}")
-            return None
-        except Exception as e:
-            logger.error(f"Error generating audio: {str(e)}", exc_info=True)
-            return None
-        finally:
-            if temp_output and os.path.exists(temp_output):
-                try:
-                    os.unlink(temp_output)
-                except Exception as e:
-                    logger.warning(f"Failed to clean up temp file {temp_output}: {str(e)}")
 
-    def _get_voice_model(self, language_code: str) -> str:
-        """Get Piper voice model for language"""
-        models = {
-            'vi_VN': 'vi_VN-25hours_single-neon',
-            'vi': 'vi_VN-25hours_single-neon',
-            'en_US': 'en_US-amy-medium',
-            'en': 'en_US-amy-medium',
-            'en_GB': 'en_GB-alba-medium',
-            'es_ES': 'es_ES-carlfm-x-low',
-            'es': 'es_ES-carlfm-x-low',
-            'fr_FR': 'fr_FR-siwis-medium',
-            'fr': 'fr_FR-siwis-medium',
-            'de_DE': 'de_DE-bernd-medium',
-            'de': 'de_DE-bernd-medium',
-            'it_IT': 'it_IT-adele-x-low',
-            'it': 'it_IT-adele-x-low',
-            'pt_PT': 'pt_PT-tugao-medium',
-            'pt': 'pt_PT-tugao-medium',
-            'pt_BR': 'pt_BR-edresson-low',
-            'ru_RU': 'ru_RU-irinia-medium',
-            'ru': 'ru_RU-irinia-medium',
-            'zh_CN': 'zh_CN-huayan-medium',
-            'zh': 'zh_CN-huayan-medium',
-            'ja_JP': 'ja_JP-kokoro-medium',
-            'ja': 'ja_JP-kokoro-medium',
-            'ko_KR': 'ko_KR-kss-medium',
-            'ko': 'ko_KR-kss-medium',
-            'th_TH': 'th_TH-acharan-medium',
-            'th': 'th_TH-acharan-medium',
-            'tr_TR': 'tr_TR-dfki-medium',
-            'tr': 'tr_TR-dfki-medium',
-            'pl_PL': 'pl_PL-darkman-medium',
-            'pl': 'pl_PL-darkman-medium',
-            'nl_NL': 'nl_NL-mls_5809-low',
-            'nl': 'nl_NL-mls_5809-low',
-            'el_GR': 'el_GR-pagerman-medium',
-            'el': 'el_GR-pagerman-medium',
-            'hu_HU': 'hu_HU-imre-medium',
-            'hu': 'hu_HU-imre-medium',
-            'ro_RO': 'ro_RO-mihai-medium',
-            'ro': 'ro_RO-mihai-medium',
-        }
+    async def _synthesise(self, text: str, voice: str) -> bytes:
+        """Async core: stream edge-tts output into an in-memory buffer."""
+        buf = io.BytesIO()
+        communicate = edge_tts.Communicate(text, voice)
+        async for chunk in communicate.stream():
+            if chunk['type'] == 'audio':
+                buf.write(chunk['data'])
+        audio = buf.getvalue()
+        if not audio:
+            raise RuntimeError(f"edge-tts returned empty audio for voice {voice!r}")
+        logger.info("[tts] audio ready: %d bytes", len(audio))
+        return audio
 
-        return models.get(language_code, 'en_US-amy-medium')
+    def list_voices(self) -> list[dict]:
+        """Return available voices (requires internet)."""
+        try:
+            return asyncio.run(edge_tts.list_voices())
+        except Exception as exc:
+            logger.error("[tts] list_voices error: %s", exc)
+            return []
