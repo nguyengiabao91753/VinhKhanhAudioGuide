@@ -3,8 +3,14 @@ using WebApi.PoC.Dtos;
 using WebApi.PoC.Models;
 using WebApi.PoC.Services;
 using WebApi.PoC.Services.IServices;
+using StackExchange.Redis;
+using WebApi.PoC.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+var redisSettings = builder.Configuration.GetSection("Redis").Get<RedisSettings>() ?? new RedisSettings();
+builder.Services.AddSingleton(redisSettings);
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+    ConnectionMultiplexer.Connect(redisSettings.ConnectionString));
 
 
 
@@ -33,6 +39,8 @@ builder.Services.AddScoped<ICloudinaryService, CloudinaryService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IPOIService, POIService>();
 builder.Services.AddScoped<ITourService, TourService>();
+builder.Services.AddSingleton<RedisSessionStore>();
+builder.Services.AddScoped<ISessionTrackingService, SessionTrackingService>();
 
 // Add multilingual services
 builder.Services.AddScoped<IOllamaService, OllamaService>();

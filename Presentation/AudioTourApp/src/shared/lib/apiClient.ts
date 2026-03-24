@@ -1,4 +1,4 @@
-const DEFAULT_API_ENDPOINT = 'https://localhost:7047/api';
+const DEFAULT_API_ENDPOINT = 'http://localhost:5111/api';
 const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || DEFAULT_API_ENDPOINT;
 
 function buildUrl(path: string) {

@@ -3,6 +3,10 @@ import { poiApi } from '@/entities/poi'
 import { tourApi } from '@/entities/tour'
 import type { Poi } from '@/entities/poi/model/types'
 import type { Tour } from '@/entities/tour/model/types'
+import { useActiveUsersSse } from '@/shared/hooks/useActiveUsersSse'
+import ActiveUsersCard from '@/widgets/active-users/ActiveUsersCard'
+import UserOnlineMap from "@/widgets/active-users/UserOnlineMap";
+import TopActivePoisCard from "@/widgets/active-users/TopActivePoisCard";
 
 type DashboardStats = {
   poiCount: number
@@ -39,6 +43,19 @@ export const DashboardPage = () => {
   })
   const [pois, setPois] = useState<Poi[]>([])
   const [tours, setTours] = useState<Tour[]>([])
+  const { data: activeUsersData } = useActiveUsersSse()
+
+  const getPoiLabel = (poiId: string) => {
+  const poi = pois.find((p) => String(p.id) === poiId);
+
+  if (!poi) return poiId;
+
+  return (
+    poi.localizedData?.find((x: any) => x.langCode === "vi")?.name ||
+    poi.localizedData?.[0]?.name ||
+    poiId
+  );
+};
 
   useEffect(() => {
     async function fetchStats() {
@@ -146,7 +163,7 @@ export const DashboardPage = () => {
         />
         <StatCard
           title="Người dùng"
-          value={stats.loading ? '...' : stats.userCount.toString()}
+          value={stats.loading ? '...' : activeUsersData.total.toString()}
           tone="purple"
           icon={
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -173,6 +190,18 @@ export const DashboardPage = () => {
               </div>
             ))}
           </div>
+        </div>
+
+        <div style={{ marginTop: 24, display: "grid", gap: 24 }}>
+          <ActiveUsersCard />
+          <TopActivePoisCard
+            sessions={activeUsersData.sessions}
+            getPoiLabel={getPoiLabel}
+          />
+        </div>
+
+        <div style={{ marginTop: 24 }}>
+          <UserOnlineMap />
         </div>
 
         <div className="app-card app-card-highlight">
