@@ -3,6 +3,7 @@ import { poiApi } from '@/entities/poi'
 import { tourApi } from '@/entities/tour'
 import type { Poi } from '@/entities/poi/model/types'
 import type { Tour } from '@/entities/tour/model/types'
+import QrCodeDisplay from '@/components/QrCodeDisplay'
 
 type DashboardStats = {
   poiCount: number
@@ -158,6 +159,8 @@ export const DashboardPage = () => {
           }
         />
       </div>
+
+      <QrCodeDisplay />
 
       <div className="dashboard-grid">
         <div className="app-card">

@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using WebApi.PoC.Dtos;
 using WebApi.PoC.Services.IServices;
+using System.Net;
+using System.Net.Sockets;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -276,5 +278,14 @@ public class PoiController : ControllerBase
         }
 
         return Convert.FromBase64String(base64Data);
+    }
+
+    // New endpoint to get local IP for QR code generation
+    [HttpGet("local-ip")]
+    public IActionResult GetLocalIp()
+    {
+        var host = Dns.GetHostEntry(Dns.GetHostName());
+        var localIp = host.AddressList.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork)?.ToString();
+        return Ok(new { ip = localIp ?? "127.0.0.1" });
     }
 }
