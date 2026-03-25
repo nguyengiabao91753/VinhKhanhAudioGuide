@@ -16,6 +16,8 @@ import { fetchTours } from '../features/tour';
 import { GeofenceEngine } from '../features/geofence/model/GeofenceEngine';
 import { t } from '../shared/i18n';
 import { AudioTierEngine } from '../features/audio/lib/AudioTierEngine';
+import { useSessionHeartbeat } from "../shared/lib/useSessionHeartbeat";
+import { useBrowserLocation } from "../shared/lib/useBrowserLocation";
 import {
   playNarration, stopNarration, speakNotification, subscribeProgress,
 } from '../engines/NarrationEngine';
@@ -123,6 +125,7 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
   const [activeTab, setActiveTab]         = useState<'tours'|'favorites'|'offline'>('tours');
   const [selectedTour, setSelectedTour]   = useState<Tour|null>(null);
   const [isOffline, setIsOffline]         = useState(false);
+  const { lat, lng } = useBrowserLocation();
   const [hasDownloadedData, setHasDownloadedData] = useState(()=>!!localStorage.getItem(OFFLINE_POIS_KEY));
   const [favorites, setFavorites]         = useState<string[]>(()=>{
     try{return JSON.parse(localStorage.getItem(FAVORITES_KEY)||'[]');}catch{return [];}
@@ -164,6 +167,17 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
 
   // Progress from Web Speech (TTS)
   useEffect(()=>{ return subscribeProgress(p=>setNarrationProgress(p)); },[]);
+
+  console.log("playingPoi?.id =", playingPoi?.id);
+  console.log("selectedTour?.id =", selectedTour?.id);
+
+  useSessionHeartbeat({
+  lang: language,
+  currentPoiId: playingPoi ? playingPoi.id : null,
+  tourId: selectedTour ? selectedTour.id : null,
+  lat,
+  lng,
+  });
 
   // ── Data loading ──────────────────────────────────────────────────────────
   useEffect(()=>{

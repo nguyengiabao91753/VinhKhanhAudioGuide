@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  import.meta.env.VITE_API_ENDPOINT || "https://localhost:7047/api";
+  import.meta.env.VITE_API_ENDPOINT || "http://localhost:5111/api";
 const AUTH_STORAGE_KEY = "vk_auth_user";
 
 // Simple mock storage for fallback
