@@ -93,6 +93,15 @@ const buildPoiFormData = (payload: PoiFormPayload) => {
     formData.append("Banner", payload.bannerFile);
   }
 
+  // Gửi URL ảnh cũ để backend giữ lại khi không upload file mới
+  if (payload.existingThumbnail) {
+    appendFormValue(formData, "ExistingThumbnail", payload.existingThumbnail);
+  }
+
+  if (payload.existingBanner) {
+    appendFormValue(formData, "ExistingBanner", payload.existingBanner);
+  }
+
   return formData;
 };
 

@@ -146,13 +146,25 @@ public class PoiController : ControllerBase
     {
         try
         {
+            // Lấy POI hiện tại để giữ lại thumbnail/banner cũ nếu không upload mới
+            var existingPoi = await _poiService.GetPoiByIdAsync(guid);
+            if (existingPoi == null)
+                return NotFound();
+
             string? thumbnailUrl = null;
             string? bannerUrl = null;
 
             if (request.Thumbnail != null)
             {
+                // Có file mới → upload lên Cloudinary
                 var uploadResult = await _cloudinaryService.UploadImageAsync(request.Thumbnail);
                 thumbnailUrl = uploadResult;
+            }
+            else
+            {
+                // Không upload file mới → ưu tiên ExistingThumbnail từ request,
+                // fallback về URL cũ trong DB
+                thumbnailUrl = request.ExistingThumbnail ?? existingPoi.Thumbnail;
             }
 
             if (request.Banner != null)
@@ -160,8 +172,12 @@ public class PoiController : ControllerBase
                 var uploadResult = await _cloudinaryService.UploadImageAsync(request.Banner);
                 bannerUrl = uploadResult;
             }
+            else
+            {
+                bannerUrl = request.ExistingBanner ?? existingPoi.Banner;
+            }
 
-            // Process audio files from multilingual generation (same as POST)
+            // Process audio: base64 → upload Cloudinary, URL cũ → giữ nguyên
             var processedLocalizedData = new List<PoiLocalizedDto>();
             foreach (var item in request.LocalizedData)
             {
@@ -174,7 +190,7 @@ public class PoiController : ControllerBase
                     DescriptionAudio = item.DescriptionAudio
                 };
 
-                // Handle audio: if descriptionAudio is base64, upload to Cloudinary
+                // Chỉ upload nếu là base64 thực sự (không phải Cloudinary URL)
                 if (!string.IsNullOrEmpty(item.DescriptionAudio) && IsBase64Audio(item.DescriptionAudio))
                 {
                     try
@@ -189,11 +205,12 @@ public class PoiController : ControllerBase
                         if (!string.IsNullOrEmpty(audioUrl))
                         {
                             processedItem.DescriptionAudio = audioUrl;
+                            Console.WriteLine($"✓ Audio uploaded [{item.LangCode}]: {audioUrl}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Failed to upload audio for {item.LangCode}: {ex.Message}");
+                        Console.WriteLine($"✗ Audio upload failed [{item.LangCode}]: {ex.Message}");
                     }
                 }
 
@@ -221,6 +238,7 @@ public class PoiController : ControllerBase
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"✗ Update POI exception: {ex.Message}");
             return StatusCode(500, ex.Message);
         }
     }

@@ -14,18 +14,22 @@ import {
 import { GenerationProgress } from "@/shared/ui/GenerationProgress";
 import { GenerationResultReview } from "@/shared/ui/GenerationResultReview";
 
-type EditPoiFormProps = {
-  poi: Poi;
-  onSuccess?: () => void;
-  onCancel?: () => void;
-};
-
+// Helper: check nếu giá trị là category keyword (không phải audio URL)
 const isCategoryValue = (value?: string) =>
   value === "MAIN" ||
   value === "WC" ||
   value === "TICKET" ||
   value === "PARKING" ||
   value === "BOAT";
+
+const hasValidAudio = (audioUrl?: string) =>
+  !!audioUrl && !isCategoryValue(audioUrl);
+
+type EditPoiFormProps = {
+  poi: Poi;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+};
 
 export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +53,12 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
 
+  // --- Trans preview panel state ---
+  const [previewLang, setPreviewLang] = useState<string>(
+    poi.localizedData[0]?.langCode || "",
+  );
+  const [playingLang, setPlayingLang] = useState<string | null>(null);
+
   // Regeneration
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
     poi.localizedData.map((l) => l.langCode),
@@ -60,6 +70,16 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
     [],
   );
   const [showReviewModal, setShowReviewModal] = useState(false);
+
+  // --- Play audio from existing DB URL ---
+  const playExistingAudio = (audioUrl: string, langCode: string) => {
+    if (!hasValidAudio(audioUrl)) return;
+    setPlayingLang(langCode);
+    const audio = new Audio(audioUrl);
+    audio.addEventListener("ended", () => setPlayingLang(null));
+    audio.addEventListener("error", () => setPlayingLang(null));
+    audio.play().catch(() => setPlayingLang(null));
+  };
 
   const handleRegenerateMultilingual = async () => {
     if (!description.trim()) {
@@ -159,12 +179,14 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
         lat,
         lng,
       },
+      // Giữ nguyên toàn bộ descriptionText và descriptionAudio đã có trong DB,
+      // chỉ cập nhật name, description (text gốc tiếng Việt)
       localizedData: poi.localizedData.map((item) => ({
         ...item,
         name,
         description,
-        descriptionText: item.descriptionText, // giữ nguyên text đã dịch
-        descriptionAudio: category,
+        descriptionText: item.descriptionText,
+        descriptionAudio: item.descriptionAudio,
       })),
       thumbnailFile,
       bannerFile,
@@ -191,6 +213,10 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
         : [...prev, langCode],
     );
   };
+
+  const selectedPreviewData = poi.localizedData.find(
+    (item) => item.langCode === previewLang,
+  );
 
   return (
     <>
@@ -266,6 +292,83 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
                 />
               </div>
             </div>
+
+            {/* ── SECTION: Xem trans hiện có trong DB ── */}
+            <div className="trans-preview-panel">
+              <div className="trans-preview-header">
+                <span className="trans-preview-title">
+                  🌍 Nội dung dịch hiện tại trong DB
+                </span>
+                <span className="trans-preview-badge">
+                  {poi.localizedData.length} ngôn ngữ
+                </span>
+              </div>
+
+              {poi.localizedData.length === 0 ? (
+                <p className="trans-preview-empty">Chưa có bản dịch nào.</p>
+              ) : (
+                <>
+                  <div className="trans-lang-tabs">
+                    {poi.localizedData.map((item) => (
+                      <button
+                        key={item.langCode}
+                        type="button"
+                        className={`trans-lang-tab ${previewLang === item.langCode ? "active" : ""}`}
+                        onClick={() => setPreviewLang(item.langCode)}>
+                        {item.langCode.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedPreviewData && (
+                    <div className="trans-preview-content">
+                      <div className="trans-preview-field">
+                        <label className="trans-field-label">
+                          📝 Văn bản đã dịch:
+                        </label>
+                        <div className="trans-field-text">
+                          {selectedPreviewData.descriptionText || (
+                            <span className="trans-field-empty">(Chưa có)</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="trans-preview-field">
+                        <label className="trans-field-label">🔊 Audio:</label>
+                        {hasValidAudio(selectedPreviewData.descriptionAudio) ? (
+                          <div className="trans-audio-row">
+                            <button
+                              type="button"
+                              className="trans-play-btn"
+                              disabled={
+                                playingLang === selectedPreviewData.langCode
+                              }
+                              onClick={() =>
+                                playExistingAudio(
+                                  selectedPreviewData.descriptionAudio,
+                                  selectedPreviewData.langCode,
+                                )
+                              }>
+                              {playingLang === selectedPreviewData.langCode
+                                ? "⏸ Đang phát..."
+                                : "▶ Nghe audio"}
+                            </button>
+                            <span className="trans-audio-hint">
+                              ✓ Đã có trên CDN
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="trans-field-empty">
+                            (Chưa có audio)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            {/* ── END SECTION ── */}
           </div>
 
           <div className="form-column poi-form-right">
@@ -315,7 +418,11 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
 
             {/* Language Selection for Regeneration */}
             <div className="language-selection-panel">
-              <label className="form-label">🌍 Regenerate ngôn ngữ</label>
+              <label className="form-label">🔄 Re-trans ngôn ngữ</label>
+              <p className="retrans-hint">
+                Chọn ngôn ngữ muốn dịch lại, sau đó nhấn "Re-trans ngôn ngữ".
+                Nếu không re-trans, hệ thống giữ nguyên bản dịch cũ trong DB.
+              </p>
               <div className="language-grid-small">
                 {SUPPORTED_LANGUAGES.map((lang) => (
                   <label key={lang.code} className="language-checkbox-small">
@@ -353,7 +460,7 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
               !description.trim() ||
               selectedLanguages.length === 0
             }>
-            {isGenerating ? "⏳ Đang sinh..." : "🔄 Regenerate ngôn ngữ"}
+            {isGenerating ? "⏳ Đang sinh..." : "🔄 Re-trans ngôn ngữ"}
           </button>
 
           <button
@@ -389,6 +496,155 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
       />
 
       <style>{`
+        /* ── Trans preview panel ── */
+        .trans-preview-panel {
+          border: 1px solid #d0e4f7;
+          border-radius: 8px;
+          padding: 14px;
+          background: #f0f7ff;
+          margin-top: 4px;
+        }
+
+        .trans-preview-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 12px;
+        }
+
+        .trans-preview-title {
+          font-weight: 600;
+          font-size: 13px;
+          color: #1a6bbf;
+        }
+
+        .trans-preview-badge {
+          background: #1a6bbf;
+          color: white;
+          border-radius: 12px;
+          padding: 2px 10px;
+          font-size: 11px;
+          font-weight: 500;
+        }
+
+        .trans-preview-empty {
+          color: #999;
+          font-size: 13px;
+          margin: 0;
+        }
+
+        .trans-lang-tabs {
+          display: flex;
+          gap: 6px;
+          flex-wrap: wrap;
+          margin-bottom: 12px;
+        }
+
+        .trans-lang-tab {
+          padding: 5px 12px;
+          border: 2px solid #c0d8f0;
+          background: white;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 600;
+          color: #555;
+          transition: all 0.15s;
+        }
+
+        .trans-lang-tab:hover {
+          border-color: #4a90e2;
+          color: #4a90e2;
+        }
+
+        .trans-lang-tab.active {
+          background: #4a90e2;
+          color: white;
+          border-color: #4a90e2;
+        }
+
+        .trans-preview-content {
+          background: white;
+          border-radius: 6px;
+          padding: 12px;
+          border: 1px solid #d0e4f7;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .trans-preview-field {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .trans-field-label {
+          font-size: 12px;
+          font-weight: 600;
+          color: #444;
+        }
+
+        .trans-field-text {
+          background: #f9f9f9;
+          border-left: 3px solid #4a90e2;
+          padding: 8px 10px;
+          border-radius: 4px;
+          font-size: 13px;
+          color: #333;
+          line-height: 1.5;
+          max-height: 100px;
+          overflow-y: auto;
+        }
+
+        .trans-field-empty {
+          color: #bbb;
+          font-style: italic;
+          font-size: 12px;
+        }
+
+        .trans-audio-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .trans-play-btn {
+          padding: 6px 14px;
+          background: #4a90e2;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+          transition: background 0.2s;
+        }
+
+        .trans-play-btn:hover:not(:disabled) {
+          background: #357abd;
+        }
+
+        .trans-play-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .trans-audio-hint {
+          color: #27ae60;
+          font-size: 12px;
+          font-weight: 500;
+        }
+
+        /* ── Re-trans hint ── */
+        .retrans-hint {
+          font-size: 12px;
+          color: #888;
+          margin: 0 0 10px 0;
+          line-height: 1.4;
+        }
+
+        /* ── Language selection (unchanged) ── */
         .language-selection-panel {
           border: 1px solid #e0e0e0;
           border-radius: 6px;
