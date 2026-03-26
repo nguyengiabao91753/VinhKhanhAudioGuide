@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using StackExchange.Redis;
+using System.Globalization;
 using WebApi.PoC.Services;
 
 namespace WebApi.PoC.Controllers
@@ -9,10 +11,14 @@ namespace WebApi.PoC.Controllers
     public class AdminAnalyticsController : ControllerBase
     {
         private readonly ISessionTrackingService _sessionTrackingService;
+        private readonly IConnectionMultiplexer _redis;
 
-        public AdminAnalyticsController(ISessionTrackingService sessionTrackingService)
+        public AdminAnalyticsController(
+            ISessionTrackingService sessionTrackingService,
+            IConnectionMultiplexer redis)
         {
             _sessionTrackingService = sessionTrackingService;
+            _redis = redis;
         }
 
         [HttpGet("active-users")]
@@ -78,6 +84,54 @@ namespace WebApi.PoC.Controllers
 
                 await Task.Delay(5000, HttpContext.RequestAborted);
             }
+        }
+
+        [HttpGet("analytics/online-trend")]
+        public async Task<IActionResult> GetOnlineTrend([FromQuery] DateTime? date = null)
+        {
+            var targetDate = (date ?? DateTime.Today).Date;
+            var db = _redis.GetDatabase();
+
+            string redisKey = $"analytics:online:{targetDate:yyyyMMdd}";
+            var entries = await db.HashGetAllAsync(redisKey);
+
+            var rawData = entries
+                .Select(x =>
+                {
+                    var timeText = x.Name.ToString();
+                    var valueText = x.Value.ToString();
+
+                    TimeSpan.TryParse(timeText, CultureInfo.InvariantCulture, out var time);
+                    int.TryParse(valueText, out var users);
+
+                    return new
+                    {
+                        Time = time,
+                        Users = users
+                    };
+                })
+                .ToList();
+
+            var result = Enumerable.Range(0, 24)
+                .Select(hour =>
+                {
+                    var valuesInHour = rawData
+                        .Where(x => x.Time.Hours == hour)
+                        .Select(x => x.Users);
+
+                    return new
+                    {
+                        hour = $"{hour:00}:00",
+                        users = valuesInHour.Any() ? valuesInHour.Max() : 0
+                    };
+                })
+                .ToList();
+
+            return Ok(new
+            {
+                date = targetDate.ToString("yyyy-MM-dd"),
+                data = result
+            });
         }
     }
 }
