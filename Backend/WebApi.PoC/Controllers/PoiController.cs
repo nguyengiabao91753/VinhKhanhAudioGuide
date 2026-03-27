@@ -245,6 +245,20 @@ public class PoiController : ControllerBase
         }
     }
 
+    [HttpDelete("{id}/localized/{langCode}")]
+    public async Task<IActionResult> DeleteLocalized(Guid id, string langCode)
+    {
+        var poi = await _poiService.GetPoiByIdAsync(id);
+        if (poi == null)
+            return NotFound(new { message = "POI not found." });
+
+        var deleted = await _poiService.DeleteLocalizedDataAsync(id, langCode);
+        if (!deleted)
+            return NotFound(new { message = $"Localized data for lang '{langCode}' not found." });
+
+        return Ok(new { message = $"Đã xóa bản dịch '{langCode}' thành công." });
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(Guid id)
     {

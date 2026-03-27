@@ -225,4 +225,17 @@ public class POIService : IPOIService
             throw;
         }
     }
+
+    public async Task<bool> DeleteLocalizedDataAsync(Guid poiId, string langCode)
+    {
+        var localizedData = await _db.pois_localizedData
+            .FirstOrDefaultAsync(ld => ld.pois_id == poiId && ld.lang_code == langCode);
+
+        if (localizedData == null)
+            return false;
+
+        _db.pois_localizedData.Remove(localizedData);
+        await _db.SaveChangesAsync();
+        return true;
+    }
 }
