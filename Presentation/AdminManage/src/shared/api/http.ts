@@ -53,6 +53,8 @@ export async function apiFetch<T>(
 
   if (!isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
+    headers.set("Accept", "application/json");
+    headers.set("ngrok-skip-browser-warning", "true");
   }
 
   // Inject JWT token if available

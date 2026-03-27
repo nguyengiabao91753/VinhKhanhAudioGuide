@@ -18,6 +18,10 @@ export async function apiGet<T>(
     const res = await fetch(buildUrl(path), {
       ...init,
       signal: controller.signal,
+      headers: {
+        ...(init.headers || {}),                    
+        'ngrok-skip-browser-warning': 'true',       
+      },
     });
 
     if (!res.ok) {
