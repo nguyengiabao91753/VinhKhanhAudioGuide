@@ -152,6 +152,9 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
   const favoritesRef   = useRef<string[]>([]);
   const languageRef    = useRef<AppLanguage>(initialLanguage);
   const prevModeRef    = useRef<Record<string,GeofenceMode>>({});
+  const speedRef       = useRef(0);
+  const lastGpsBearingAtRef = useRef(0);
+  const headingUpRef   = useRef(false);
   // Track active HTML audio element for progress
   const activeAudioRef = useRef<HTMLAudioElement|null>(null);
   // Mirror of playingPoi for use in callbacks without stale closure
@@ -164,6 +167,7 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
   useEffect(()=>{ playingPoiRef.current=playingPoi; },[playingPoi]);
   useEffect(()=>{ favoritesRef.current=favorites; },[favorites]);
   useEffect(()=>{ languageRef.current=language; audioRef.current.setLanguage(language); },[language]);
+  useEffect(()=>{ headingUpRef.current=headingUp; },[headingUp]);
 
   // Progress from Web Speech (TTS)
   useEffect(()=>{ return subscribeProgress(p=>setNarrationProgress(p)); },[]);
@@ -211,11 +215,18 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
     const unsub=loc.subscribe((sl:SmoothLocation)=>{
       const nl={lat:sl.lat,lng:sl.lng};
       setLocation(nl); locationRef.current=nl;
-      if(sl.speed>0.8)setBearing(prev=>{
-        let diff=sl.bearing-prev;
-        if(diff>180)diff-=360;if(diff<-180)diff+=360;
-        return Math.round((prev+diff*0.25+360)%360);
-      });
+      speedRef.current = sl.speed;
+
+      // Moving fast enough: trust GPS course over noisy compass.
+      if(sl.speed > 1.2){
+        lastGpsBearingAtRef.current = Date.now();
+        setBearing(prev=>{
+          let diff=sl.bearing-prev;
+          if(diff>180)diff-=360;if(diff<-180)diff+=360;
+          const step = Math.max(-12, Math.min(12, diff * 0.22));
+          return Math.round((prev+step+360)%360);
+        });
+      }
       setError(null);
     });
     loc.start();
@@ -225,16 +236,22 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
   // ── Compass ────────────────────────────────────────────────────────────────
   useEffect(()=>{
     let smoothed:number|null=null,lastMs=0;
-    const ALPHA=0.12,THR=3,GAP=100;
+    const ALPHA=0.08,THR=2,GAP=160;
     const h=(e:DeviceOrientationEvent)=>{
+      if (!headingUpRef.current) return;
+      // Ignore compass updates while moving; GPS course is much stabler then.
+      if (speedRef.current > 1.2) return;
+      if (Date.now() - lastGpsBearingAtRef.current < 1500) return;
+
       const wk=(e as unknown as{webkitCompassHeading?:number}).webkitCompassHeading;
       const raw=wk!==undefined?wk:e.alpha!==null?(360-e.alpha!)%360:null;
       if(raw===null)return;
       if(smoothed===null){smoothed=raw;return;}
       let diff=raw-smoothed;if(diff>180)diff-=360;if(diff<-180)diff+=360;
-      smoothed=(smoothed+diff*ALPHA+360)%360;
+      const clamped = Math.max(-15, Math.min(15, diff));
+      smoothed=(smoothed+clamped*ALPHA+360)%360;
       const now=Date.now();
-      if(Math.abs(diff*ALPHA)<THR&&now-lastMs<GAP)return;
+      if(Math.abs(clamped*ALPHA)<THR&&now-lastMs<GAP)return;
       lastMs=now;setBearing(Math.round(smoothed));
     };
     window.addEventListener('deviceorientationabsolute',h as EventListener,true);

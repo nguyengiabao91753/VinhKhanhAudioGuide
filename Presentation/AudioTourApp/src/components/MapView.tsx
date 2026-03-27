@@ -146,13 +146,39 @@ function MapController({
 }) {
   const map = useMap();
   const prevLoc = useRef<{ lat: number; lng: number } | null>(null);
+  const autoFollowPausedUntilRef = useRef(0);
+
+  useEffect(() => {
+    const pauseFollow = () => {
+      autoFollowPausedUntilRef.current = Date.now() + 20000;
+    };
+    map.on('dragstart', pauseFollow);
+    map.on('zoomstart', pauseFollow);
+    return () => {
+      map.off('dragstart', pauseFollow);
+      map.off('zoomstart', pauseFollow);
+    };
+  }, [map]);
 
   useEffect(() => {
     if (!location) return;
     const prev = prevLoc.current;
     prevLoc.current = location;
-    if (!prev) { map.setView([location.lat, location.lng], map.getZoom()); return; }
-    map.panTo([location.lat, location.lng], { animate: true, duration: 0.3, easeLinearity: 0.5 });
+    const next = L.latLng(location.lat, location.lng);
+
+    if (!prev) {
+      map.setView(next, map.getZoom(), { animate: false });
+      return;
+    }
+
+    const movedMeters = map.distance(L.latLng(prev.lat, prev.lng), next);
+    if (movedMeters < 2) return;
+    if (Date.now() < autoFollowPausedUntilRef.current) return;
+
+    const distanceToCenter = map.distance(map.getCenter(), next);
+    if (distanceToCenter < 10) return;
+
+    map.panTo(next, { animate: true, duration: 0.35, easeLinearity: 0.6 });
   }, [location, map]);
 
   // ── Bearing rotation via RAF — decoupled from React render cycle ────
@@ -161,41 +187,47 @@ function MapController({
   const bearingRef = useRef(bearing);
   const headingRef = useRef(headingUp);
   const rafBearRef = useRef<number | null>(null);
-  const prevRotRef = useRef<number | null>(null);   // last applied rotation (deg)
+  const appliedBearingRef = useRef(0);
 
   useEffect(() => { bearingRef.current = bearing; }, [bearing]);
   useEffect(() => { headingRef.current = headingUp; }, [headingUp]);
 
   useEffect(() => {
     const container = map.getContainer();
+    const controls = Array.from(container.querySelectorAll<HTMLElement>('.leaflet-control-container'));
 
     const tick = () => {
       rafBearRef.current = requestAnimationFrame(tick);
 
       if (!headingRef.current) {
-        // Heading-up turned off — snap back to 0 once
-        if (prevRotRef.current !== 0) {
-          container.style.transition = 'transform 0.3s ease';
+        if (appliedBearingRef.current !== 0) {
+          container.style.transition = 'transform 0.25s ease';
           container.style.transform = '';
-          container.querySelectorAll<HTMLElement>('.leaflet-control-container')
-            .forEach(el => { el.style.transform = ''; });
-          prevRotRef.current = 0;
+          controls.forEach((el) => {
+            el.style.transition = 'transform 0.25s ease';
+            el.style.transform = '';
+          });
+          appliedBearingRef.current = 0;
         }
         return;
       }
 
-      const target = -bearingRef.current;
-      if (prevRotRef.current === target) return; // nothing changed
+      const targetBearing = ((bearingRef.current % 360) + 360) % 360;
+      const currentBearing = appliedBearingRef.current;
+      let diff = targetBearing - currentBearing;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+      if (Math.abs(diff) < 0.2) return;
 
-      // CSS transition handles the interpolation smoothly
-      container.style.transition = 'transform 0.15s linear';
-      container.style.transform = `rotate(${target}deg)`;
-      container.querySelectorAll<HTMLElement>('.leaflet-control-container')
-        .forEach(el => {
-          el.style.transition = 'transform 0.15s linear';
-          el.style.transform = `rotate(${bearingRef.current}deg)`;
-        });
-      prevRotRef.current = target;
+      const nextBearing = (currentBearing + diff * 0.16 + 360) % 360;
+      appliedBearingRef.current = nextBearing;
+
+      container.style.transition = 'none';
+      container.style.transform = `rotate(${-nextBearing}deg)`;
+      controls.forEach((el) => {
+        el.style.transition = 'none';
+        el.style.transform = `rotate(${nextBearing}deg)`;
+      });
     };
 
     rafBearRef.current = requestAnimationFrame(tick);
@@ -203,8 +235,12 @@ function MapController({
       if (rafBearRef.current) cancelAnimationFrame(rafBearRef.current);
       container.style.transform = '';
       container.style.transition = '';
+      controls.forEach((el) => {
+        el.style.transform = '';
+        el.style.transition = '';
+      });
     };
-  }, [map]); // ← ONLY map — bearing changes never restart this effect
+  }, [map]); // keep rotation loop stable, do not restart on every bearing change
 
   return null;
 }

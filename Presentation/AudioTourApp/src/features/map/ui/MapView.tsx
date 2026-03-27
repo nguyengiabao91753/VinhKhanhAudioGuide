@@ -51,6 +51,19 @@ function MarkersLayer({
   const map = useMap();
   const userRef = useRef<L.Marker | null>(null);
   const poiRefs = useRef<Map<string, L.Marker>>(new Map());
+  const autoFollowPausedUntilRef = useRef(0);
+
+  useEffect(() => {
+    const pauseFollow = () => {
+      autoFollowPausedUntilRef.current = Date.now() + 20000;
+    };
+    map.on('dragstart', pauseFollow);
+    map.on('zoomstart', pauseFollow);
+    return () => {
+      map.off('dragstart', pauseFollow);
+      map.off('zoomstart', pauseFollow);
+    };
+  }, [map]);
 
   useEffect(() => {
     if (!userLocation) return;
@@ -61,7 +74,12 @@ function MarkersLayer({
     } else {
       userRef.current.setLatLng(ll).setIcon(icon);
     }
-    map.panTo(ll, { animate: true, duration: 0.4, easeLinearity: 0.5 });
+
+    if (Date.now() < autoFollowPausedUntilRef.current) return;
+    const distanceToCenter = map.distance(map.getCenter(), L.latLng(ll[0], ll[1]));
+    if (distanceToCenter < 10) return;
+
+    map.panTo(ll, { animate: true, duration: 0.35, easeLinearity: 0.6 });
   }, [userLocation, bearing, map]);
 
   useEffect(() => {
