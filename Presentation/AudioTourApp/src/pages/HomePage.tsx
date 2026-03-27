@@ -7,6 +7,7 @@ import { GeofenceService } from '../features/geofence';
 import { NarrationService } from '../features/narration';
 import { fetchPois } from '../shared/lib';
 import type { PoiDto } from '../entities/poi';
+import type { SmoothLocation } from '../features/location/lib/SmoothLocationService';
 import '../styles/global.css';
 
 export default function HomePage() {
@@ -15,6 +16,17 @@ export default function HomePage() {
   const [currentLanguage, setCurrentLanguage] = useState<string>('vi');
 
   const location = useLocation();
+  const userLocation: SmoothLocation | null = location
+    ? {
+      lat: location.latitude,
+      lng: location.longitude,
+      accuracy: location.accuracy,
+      bearing: 0,
+      speed: 0,
+      timestamp: location.timestamp,
+      raw: true,
+    }
+    : null;
 
   useEffect(()=>{
     fetchPois().then(setPois).catch(() => {});
@@ -55,7 +67,7 @@ export default function HomePage() {
       <main className="main">
         <MapView
           pois={pois}
-          userLocation={location}
+          userLocation={userLocation}
           activePoi={activePoi}
           onMarkerClick={handleMarkerClick}
           currentLanguage={currentLanguage}
@@ -67,7 +79,7 @@ export default function HomePage() {
           <div className="bottom-panel">
             <PoiInfoPanel
               poi={activePoi}
-              distance={activePoi && location ? GeofenceService.getInstance().distanceBetween(location.latitude, location.longitude, activePoi.position.lat, activePoi.position.lng) : null}
+              distance={activePoi && userLocation ? GeofenceService.getInstance().distanceBetween(userLocation.lat, userLocation.lng, activePoi.position.lat, activePoi.position.lng) : null}
               isPlaying={NarrationService.getInstance().isPlaying()}
               currentLanguage={currentLanguage}
               onPlay={() => activePoi && NarrationService.getInstance().playPoi(activePoi, false)}

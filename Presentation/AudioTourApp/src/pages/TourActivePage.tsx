@@ -75,38 +75,38 @@ export default function TourActivePage() {
     geofenceRef.current.updatePosition({ lat: userLocation.lat, lng: userLocation.lng }, mapped as never);
 
     // Pre-fetch
-    const toFetch = geofenceRef.current.getPrefetchPois(mapped as never);
-    for (const p of toFetch) {
-      const poi = tourPois.find((tp) => tp.id === p.id);
-      if (poi) audioRef.current.prefetch(poi);
-      geofenceRef.current.markPrefetched(p.id);
-    }
+    // const toFetch = geofenceRef.current.getPrefetchPois(mapped as never);
+    // for (const p of toFetch) {
+    //   const poi = tourPois.find((tp) => tp.id === p.id);
+    //   if (poi) audioRef.current.prefetch(poi);
+    //   geofenceRef.current.markPrefetched(p.id);
+    // }
 
     return undefined;
   }, [userLocation, tourPois]);
 
-  useEffect(() => {
-    narrationTimerRef.current = setInterval(() => {
-      if (audioRef.current.state.isPlaying || tourPois.length === 0) return;
+  // useEffect(() => {
+  //   narrationTimerRef.current = setInterval(() => {
+  //     if (audioRef.current.state.isPlaying || tourPois.length === 0) return;
 
-      const mapped = tourPois.map((p) => ({
-        id: p.id, lat: p.position.lat, lng: p.position.lng,
-        range: p.range, priority: 0, played: false,
-        name: { vi: '', en: '' }, description: { vi: '', en: '' },
-      }));
-      const ready = geofenceRef.current.getReadyPois(mapped as never);
-      if (ready.length === 0) return;
+  //     const mapped = tourPois.map((p) => ({
+  //       id: p.id, lat: p.position.lat, lng: p.position.lng,
+  //       range: p.range, priority: 0, played: false,
+  //       name: { vi: '', en: '' }, description: { vi: '', en: '' },
+  //     }));
+  //     const ready = geofenceRef.current.getReadyPois(mapped as never);
+  //     if (ready.length === 0) return;
 
-      const target = tourPois.find((p) => p.id === ready[0].id);
-      if (!target) return;
+  //     const target = tourPois.find((p) => p.id === ready[0].id);
+  //     if (!target) return;
 
-      setActivePoi(target);
-      geofenceRef.current.markTriggered(target.id);
-      audioRef.current.setLanguage(language);
-      audioRef.current.play(target, false);
-    }, 1000);
-    return () => { if (narrationTimerRef.current) clearInterval(narrationTimerRef.current); };
-  }, [tourPois, language]);
+  //     setActivePoi(target);
+  //     geofenceRef.current.markTriggered(target.id);
+  //     audioRef.current.setLanguage(language);
+  //     audioRef.current.play(target, false);
+  //   }, 1000);
+  //   return () => { if (narrationTimerRef.current) clearInterval(narrationTimerRef.current); };
+  // }, [tourPois, language]);
 
   useEffect(() => {
     audioRef.current.setLanguage(language);
