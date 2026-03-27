@@ -42,8 +42,11 @@ interface Props {
   userLocation?: { lat: number; lng: number } | null;
   /** External progress 0–1 (from App — tracks both HTMLAudio and SpeechSynthesis) */
   narrationProgress?: number;
+  narrationIsPlaying?: boolean;
+  narrationIsPaused?: boolean;
   isGenerating?: boolean;
   onClose: () => void;
+  onTogglePause?: () => void;
   /** Called when user taps Replay or changes language — passes selected lang */
   onReplay: (poi: PoiDto, lang: string) => void;
 }
@@ -103,7 +106,19 @@ function Ring({progress,size=52,stroke=3}:{progress:number;size?:number;stroke?:
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
-export default function NarrationBanner({poi,mode,language,userLocation,narrationProgress:extProgress,isGenerating,onClose,onReplay}:Props){
+export default function NarrationBanner({
+  poi,
+  mode,
+  language,
+  userLocation,
+  narrationProgress:extProgress,
+  narrationIsPlaying,
+  narrationIsPaused,
+  isGenerating,
+  onClose,
+  onTogglePause,
+  onReplay,
+}:Props){
   injectCSS();
 
   const [as,setAs]               = useState<AudioTierState|null>(null);
@@ -135,8 +150,8 @@ export default function NarrationBanner({poi,mode,language,userLocation,narratio
   },[poi]);
 
   // Use external progress (more reliable — tracks both HTMLAudio and Web Speech)
-  const isPlay  = as?.isPlaying??false;
-  const isPause = as?.isPaused??false;
+  const isPlay  = narrationIsPlaying ?? as?.isPlaying ?? false;
+  const isPause = narrationIsPaused ?? as?.isPaused ?? false;
   const prog    = extProgress ?? as?.progress ?? 0;
   const ended   = !isPlay&&!isPause&&prog>0.01;
   const dist    = (userLocation&&poi)
@@ -157,6 +172,12 @@ export default function NarrationBanner({poi,mode,language,userLocation,narratio
   const handleReplayClick = useCallback(()=>{
     if(poi) onReplay(poi, selectedLang);
   },[poi,selectedLang,onReplay]);
+
+  const handlePauseResume = useCallback(()=>{
+    if(onTogglePause){ onTogglePause(); return; }
+    if(isPause) eng.current.resume();
+    else eng.current.pause();
+  },[isPause,onTogglePause]);
 
   const close = useCallback(()=>{
     eng.current.stop();
@@ -201,7 +222,7 @@ export default function NarrationBanner({poi,mode,language,userLocation,narratio
             </p>
           </div>
           <div style={{display:'flex',gap:6,flexShrink:0}}>
-            <button onClick={()=>isPause?eng.current.resume():eng.current.pause()}
+            <button onClick={handlePauseResume}
               style={{width:34,height:34,borderRadius:'50%',background:'#ecfdf5',
                 border:'none',cursor:'pointer',display:'flex',alignItems:'center',
                 justifyContent:'center',color:'#059669'}}>
@@ -333,7 +354,7 @@ export default function NarrationBanner({poi,mode,language,userLocation,narratio
         <div style={{position:'relative',width:52,height:52,flexShrink:0}}>
           <Ring progress={prog} size={52} stroke={3}/>
           <button
-            onClick={()=>isPause?eng.current.resume():eng.current.pause()}
+            onClick={handlePauseResume}
             disabled={ended}
             style={{
               position:'absolute',inset:4,borderRadius:'50%',

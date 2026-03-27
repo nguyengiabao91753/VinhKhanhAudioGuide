@@ -40,8 +40,11 @@ const FAVORITES_KEY    = 'autonarration_favorites';
 const OFFLINE_POIS_KEY = 'autonarration_offline_pois';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+function getLdStrict(poi: PoiDto, lang: string): LocalizedData | undefined {
+  return poi.localizedData?.find(l => l.langCode === lang);
+}
 function getLd(poi: PoiDto, lang: string): LocalizedData | undefined {
-  return poi.localizedData?.find(l => l.langCode === lang) ?? poi.localizedData?.[0];
+  return getLdStrict(poi, lang) ?? poi.localizedData?.[0];
 }
 function poiName(poi: PoiDto, lang: string) { return getLd(poi, lang)?.name || poi.id; }
 
@@ -73,7 +76,7 @@ function hav(la1:number,ln1:number,la2:number,ln2:number){
 function totalWpDist(wps: Waypoint[]): number {
   let d=0; for(let i=1;i<wps.length;i++) d+=hav(wps[i-1].lat,wps[i-1].lng,wps[i].lat,wps[i].lng); return d;
 }
-function safeLang(l: string): 'vi'|'en' { return (l==='vi'||l==='en') ? l : 'en'; }
+function safeLang(l: string): string { return l || 'en'; }
 
 // Approach notification messages per language
 const APPROACH_MSG: Record<string,(name:string)=>string> = {
@@ -117,6 +120,7 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
   const [bannerMode, setBannerMode]       = useState<BannerMode>('auto');
   const [isGenerating, setIsGenerating]   = useState(false);
   const [narrationProgress, setNarrationProgress] = useState(0);
+  const [narrationFlags, setNarrationFlags] = useState({ isPlaying: false, isPaused: false });
   const [error, setError]                 = useState<string|null>(null);
   const [gpsPollMs, setGpsPollMs]         = useState(5000);
   const [geofenceMode, setGeofenceMode]   = useState<GeofenceMode>('CRUISE');
@@ -168,6 +172,94 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
   useEffect(()=>{ favoritesRef.current=favorites; },[favorites]);
   useEffect(()=>{ languageRef.current=language; audioRef.current.setLanguage(language); },[language]);
   useEffect(()=>{ headingUpRef.current=headingUp; },[headingUp]);
+
+  const patchGeneratedLangToState = useCallback((poiId: string, lang: string, audioUrl: string) => {
+    const patchPoi = (p: PoiDto): PoiDto => {
+      if (p.id !== poiId) return p;
+
+      const list = p.localizedData ?? [];
+      const idx = list.findIndex(ld => ld.langCode === lang);
+
+      if (idx >= 0) {
+        return {
+          ...p,
+          localizedData: list.map((ld, i) => (
+            i === idx
+              ? {
+                ...ld,
+                descriptionAudio: isPlayableUrl(ld.descriptionAudio)
+                  ? ld.descriptionAudio
+                  : (audioUrl || ld.descriptionAudio || ''),
+              }
+              : ld
+          )),
+        };
+      }
+
+      const base = list.find(ld => ld.langCode === 'vi') ?? list[0];
+      return {
+        ...p,
+        localizedData: [
+          ...list,
+          {
+            langCode: lang,
+            name: base?.name ?? 'POI',
+            description: base?.description ?? '',
+            descriptionText: base?.descriptionText ?? base?.description ?? '',
+            descriptionAudio: audioUrl || '',
+          },
+        ],
+      };
+    };
+
+    setPois(prev => prev.map(patchPoi));
+    setPlayingPoi(prev => (prev ? patchPoi(prev) : prev));
+  }, []);
+
+  useEffect(()=>{
+    const sync = () => {
+      const a = activeAudioRef.current;
+      const synth = (typeof window !== 'undefined' && 'speechSynthesis' in window)
+        ? window.speechSynthesis
+        : null;
+
+      const audioPlaying = !!a && !a.paused && !a.ended;
+      const audioPaused = !!a && a.paused && a.currentTime > 0 && !a.ended;
+      const ttsPlaying = !!synth?.speaking && !synth.paused;
+      const ttsPaused = !!synth?.paused;
+
+      const next = {
+        isPlaying: audioPlaying || ttsPlaying,
+        isPaused: !(audioPlaying || ttsPlaying) && (audioPaused || ttsPaused),
+      };
+
+      setNarrationFlags(prev =>
+        prev.isPlaying === next.isPlaying && prev.isPaused === next.isPaused ? prev : next
+      );
+    };
+
+    sync();
+    const timer = setInterval(sync, 160);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleTogglePause = useCallback(() => {
+    const a = activeAudioRef.current;
+    if (a) {
+      if (a.paused) a.play().catch(() => {});
+      else a.pause();
+      return;
+    }
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const synth = window.speechSynthesis;
+      if (synth.paused) { synth.resume(); return; }
+      if (synth.speaking) { synth.pause(); return; }
+    }
+
+    if (audioRef.current.state.isPaused) audioRef.current.resume();
+    else if (audioRef.current.state.isPlaying) audioRef.current.pause();
+  }, []);
 
   // Progress from Web Speech (TTS)
   useEffect(()=>{ return subscribeProgress(p=>setNarrationProgress(p)); },[]);
@@ -289,8 +381,8 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
 
     // Prefetch audio for buffer POIs
     for(const poi of geofenceRef.current.getPrefetchPois(relevantPois,new Set())){
-      const ld=getLd(poi,lang);
-      if(!ld?.descriptionAudio) prefetchAudioForPoi(poi,lang);
+      const ld=getLdStrict(poi,lang);
+      if(!isPlayableUrl(ld?.descriptionAudio)) prefetchAudioForPoi(poi,lang);
       geofenceRef.current.markPrefetched(poi.id);
     }
   },[location,isTracking,relevantPois,gpsPollMs]);
@@ -314,14 +406,15 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
     setNarrationProgress(0);
     logNarration(poi.id, lang, 'play');
 
-    const ld = getLd(poi, lang);
+    const ldStrict = getLdStrict(poi, lang);
+    const ld = ldStrict ?? getLd(poi, lang);
 
     // 1. Cached blob/URL from earlier generation?
     const cached = getCachedAudio(poi.id, lang);
     if(cached){ _playUrl(cached, poi, lang); return; }
 
     // 2. DB has audio for this lang? Guard against non-URL values like 'MAIN'
-    if(isPlayableUrl(ld?.descriptionAudio)){ _playUrl(ld.descriptionAudio, poi, lang); return; }
+    if(isPlayableUrl(ldStrict?.descriptionAudio)){ _playUrl(ldStrict.descriptionAudio, poi, lang); return; }
 
     // 3. Need to generate — show loading + speak "wait" immediately
     if(isManual){
@@ -336,13 +429,20 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
     genAbortRef.current = null;
     if(isManual) setIsGenerating(false);
 
-    if(url){ _playUrl(url, poi, lang); return; }
+    if(url){
+      patchGeneratedLangToState(poi.id, lang, url);
+      _playUrl(url, poi, lang);
+      return;
+    }
 
     // 4. TTS fallback
-    const text = ld?.descriptionText || ld?.description ||
-      getLd(poi,'vi')?.descriptionText || getLd(poi,'vi')?.description || '';
+    const text = ldStrict?.descriptionText || ldStrict?.description ||
+      getLdStrict(poi,'vi')?.descriptionText || getLdStrict(poi,'vi')?.description ||
+      getLd(poi,'vi')?.descriptionText || getLd(poi,'vi')?.description ||
+      getLd(poi,'en')?.descriptionText || getLd(poi,'en')?.description ||
+      ld?.descriptionText || ld?.description || '';
     if(text) playNarration(text, safeLang(lang), ()=>{});
-  },[]);
+  },[patchGeneratedLangToState]);
 
   function _playUrl(url: string, fallbackPoi?: PoiDto, fallbackLang?: string){
     const a=new Audio(url);
@@ -354,18 +454,26 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
       setNarrationProgress(0);activeAudioRef.current=null;
       // Audio URL failed → TTS fallback
       if(fallbackPoi&&fallbackLang){
-        const ld=getLd(fallbackPoi,fallbackLang);
-        const text=ld?.descriptionText||ld?.description||
-          getLd(fallbackPoi,'vi')?.descriptionText||getLd(fallbackPoi,'vi')?.description||'';
+        const ldStrict=getLdStrict(fallbackPoi,fallbackLang);
+        const ld=ldStrict ?? getLd(fallbackPoi,fallbackLang);
+        const text=ldStrict?.descriptionText||ldStrict?.description||
+          getLdStrict(fallbackPoi,'vi')?.descriptionText||getLdStrict(fallbackPoi,'vi')?.description||
+          getLd(fallbackPoi,'vi')?.descriptionText||getLd(fallbackPoi,'vi')?.description||
+          getLd(fallbackPoi,'en')?.descriptionText||getLd(fallbackPoi,'en')?.description||
+          ld?.descriptionText||ld?.description||'';
         if(text)playNarration(text,safeLang(fallbackLang),()=>{});
       }
     };
     a.play().catch(()=>{
       activeAudioRef.current=null;
       if(fallbackPoi&&fallbackLang){
-        const ld=getLd(fallbackPoi,fallbackLang);
-        const text=ld?.descriptionText||ld?.description||
-          getLd(fallbackPoi,'vi')?.descriptionText||getLd(fallbackPoi,'vi')?.description||'';
+        const ldStrict=getLdStrict(fallbackPoi,fallbackLang);
+        const ld=ldStrict ?? getLd(fallbackPoi,fallbackLang);
+        const text=ldStrict?.descriptionText||ldStrict?.description||
+          getLdStrict(fallbackPoi,'vi')?.descriptionText||getLdStrict(fallbackPoi,'vi')?.description||
+          getLd(fallbackPoi,'vi')?.descriptionText||getLd(fallbackPoi,'vi')?.description||
+          getLd(fallbackPoi,'en')?.descriptionText||getLd(fallbackPoi,'en')?.description||
+          ld?.descriptionText||ld?.description||'';
         if(text)playNarration(text,safeLang(fallbackLang),()=>{});
       }
     });
@@ -405,9 +513,10 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
       geofenceRef.current.markTriggered(target.id);
       setNarrationProgress(0);
 
-      const ld=getLd(target,lang);
+      const ldStrict=getLdStrict(target,lang);
+      const ld=ldStrict ?? getLd(target,lang);
       const cached=getCachedAudio(target.id,lang);
-      const audioUrl=cached||(isPlayableUrl(ld?.descriptionAudio)?ld.descriptionAudio:undefined);
+      const audioUrl=cached||(isPlayableUrl(ldStrict?.descriptionAudio)?ldStrict.descriptionAudio:undefined);
 
       const finish=()=>{
         setTimeout(()=>setPlayingPoi(null),3000);
@@ -420,29 +529,39 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
         a.ontimeupdate=()=>{if(a.duration>0)setNarrationProgress(a.currentTime/a.duration);};
         a.onended=finish;
         a.onerror=()=>{
-          const t=ld?.descriptionText||ld?.description||'';
+          const t=ldStrict?.descriptionText||ldStrict?.description||
+            getLd(target,'vi')?.descriptionText||getLd(target,'vi')?.description||
+            getLd(target,'en')?.descriptionText||getLd(target,'en')?.description||
+            ld?.descriptionText||ld?.description||'';
           if(t)playNarration(t,safeLang(lang),finish);else finish();
         };
         a.play().catch(()=>{
-          const t=ld?.descriptionText||ld?.description||'';
+          const t=ldStrict?.descriptionText||ldStrict?.description||
+            getLd(target,'vi')?.descriptionText||getLd(target,'vi')?.description||
+            getLd(target,'en')?.descriptionText||getLd(target,'en')?.description||
+            ld?.descriptionText||ld?.description||'';
           if(t)playNarration(t,safeLang(lang),finish);else finish();
         });
       } else {
         // No audio → generate async then play
         const genUrl=await generateAudioForPoi(target,lang);
         if(genUrl){
+          patchGeneratedLangToState(target.id, lang, genUrl);
           const a=new Audio(genUrl);
           activeAudioRef.current=a;
           a.ontimeupdate=()=>{if(a.duration>0)setNarrationProgress(a.currentTime/a.duration);};
           a.onended=finish; a.play().catch(finish);
         } else {
-          const t=ld?.descriptionText||ld?.description||'';
+          const t=ldStrict?.descriptionText||ldStrict?.description||
+            getLd(target,'vi')?.descriptionText||getLd(target,'vi')?.description||
+            getLd(target,'en')?.descriptionText||getLd(target,'en')?.description||
+            ld?.descriptionText||ld?.description||'';
           if(t)playNarration(t,safeLang(lang),finish);else finish();
         }
       }
     },500);
     return()=>{if(narTimerRef.current)clearInterval(narTimerRef.current);};
-  },[isTracking]);
+  },[isTracking, patchGeneratedLangToState]);
 
   // ── User click: always allowed, no locking ───────────────────────────────
   // Uses refs (playingPoiRef, languageRef) NOT state — avoids stale closure entirely
@@ -656,7 +775,10 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
         language={language}
         userLocation={location}
         narrationProgress={narrationProgress}
+        narrationIsPlaying={narrationFlags.isPlaying}
+        narrationIsPaused={narrationFlags.isPaused}
         isGenerating={isGenerating}
+        onTogglePause={handleTogglePause}
         onClose={()=>{
           setPlayingPoi(null);audioRef.current.stop();stopNarration();
           if(activeAudioRef.current){activeAudioRef.current.pause();activeAudioRef.current=null;}
