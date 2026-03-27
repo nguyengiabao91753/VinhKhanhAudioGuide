@@ -145,6 +145,10 @@ export const poiApi = {
     apiFetch<ApiResponse<boolean>>(`/pois/${id}`, {
       method: "DELETE",
     }),
+  deleteLocalizedData: (id: string, langCode: string) =>
+    apiFetch<{ message: string }>(`/pois/${id}/localized/${langCode}`, {
+      method: "DELETE",
+    }),
 };
 
 export const multilingualApi = {

@@ -6,7 +6,10 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    allowedHosts: ["pachydermatous-creolized-kareem.ngrok-free.dev"],
+    host: true,        
+    port: 5173,        
+    strictPort: true,  
+    allowedHosts: true 
   },
   build: {
     rollupOptions: {

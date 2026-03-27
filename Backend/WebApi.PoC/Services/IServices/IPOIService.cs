@@ -11,4 +11,5 @@ public interface IPOIService
     Task<PoiDto?> UpdatePoiAsync(PoiDto poiDto);
 
     Task<IEnumerable<Guid>?> DeletePoiAsync(Guid id);
+    Task<bool> DeleteLocalizedDataAsync(Guid poiId, string langCode);
 }

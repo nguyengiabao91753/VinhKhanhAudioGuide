@@ -1,11 +1,11 @@
-import { Modal } from './Modal'
+import { Modal } from "./Modal";
 
 type GenerationProgressProps = {
-  open: boolean
-  progress: number // 0-100
-  currentLanguage?: string
-  status?: string
-}
+  open: boolean;
+  progress: number; // 0-100
+  currentLanguage?: string;
+  status?: string;
+};
 
 export function GenerationProgress({
   open,
@@ -20,14 +20,18 @@ export function GenerationProgress({
 
         <div className="progress-container">
           <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+            <div
+              className="progress-fill"
+              style={{ width: `${progress}%` }}></div>
           </div>
           <div className="progress-percentage">{progress}%</div>
         </div>
 
         {currentLanguage && (
           <div className="current-language">
-            <span className="language-badge">{currentLanguage.toUpperCase()}</span>
+            <span className="language-badge">
+              {currentLanguage.toUpperCase()}
+            </span>
             <span className="processing-text">Đang xử lý...</span>
           </div>
         )}
@@ -35,7 +39,7 @@ export function GenerationProgress({
         {status && <div className="status-message">{status}</div>}
 
         <div className="progress-hint">
-          Quá trình này sử dụng Ollama AI để sửa ngữ pháp, dịch, và tạo audio.
+          Quá trình này dịch và tạo audio.
           <br />
           Vui lòng đợi...
         </div>
@@ -48,6 +52,7 @@ export function GenerationProgress({
           border-radius: 8px;
           max-width: 400px;
           text-align: center;
+          margin: 0 auto;
         }
 
         .generation-progress-modal h2 {
@@ -127,5 +132,5 @@ export function GenerationProgress({
         }
       `}</style>
     </Modal>
-  )
+  );
 }

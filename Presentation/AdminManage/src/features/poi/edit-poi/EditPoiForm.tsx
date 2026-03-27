@@ -58,6 +58,9 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
     poi.localizedData[0]?.langCode || "",
   );
   const [playingLang, setPlayingLang] = useState<string | null>(null);
+  const [deletedLanguages, setDeletedLanguages] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Regeneration
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
@@ -165,6 +168,37 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
     }
   };
 
+  const handleDeleteLanguage = async (langCode: string) => {
+    const confirmed = window.confirm(
+      `Bạn có chắc muốn xóa bản dịch "${langCode.toUpperCase()}" không?\n\nHành động này không thể hoàn tác.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await poiApi.deleteLocalizedData(poi.id, langCode);
+      setDeletedLanguages((prev) => {
+        const updated = new Set(prev);
+        updated.add(langCode);
+        return updated;
+      });
+      setSelectedLanguages((prev) => prev.filter((l) => l !== langCode));
+      if (previewLang === langCode && poi.localizedData.length > 1) {
+        const nextLang = poi.localizedData.find(
+          (item) =>
+            item.langCode !== langCode && !deletedLanguages.has(item.langCode),
+        )?.langCode;
+        if (nextLang) setPreviewLang(nextLang);
+      }
+      toastSuccess(`Đã xóa bản dịch "${langCode.toUpperCase()}" thành công.`);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : `Không thể xóa bản dịch "${langCode}"`;
+      toastError(message);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -179,15 +213,15 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
         lat,
         lng,
       },
-      // Giữ nguyên toàn bộ descriptionText và descriptionAudio đã có trong DB,
-      // chỉ cập nhật name, description (text gốc tiếng Việt)
-      localizedData: poi.localizedData.map((item) => ({
-        ...item,
-        name,
-        description,
-        descriptionText: item.descriptionText,
-        descriptionAudio: item.descriptionAudio,
-      })),
+      localizedData: poi.localizedData
+        .filter((item) => !deletedLanguages.has(item.langCode))
+        .map((item) => ({
+          ...item,
+          name,
+          description,
+          descriptionText: item.descriptionText,
+          descriptionAudio: item.descriptionAudio,
+        })),
       thumbnailFile,
       bannerFile,
     };
@@ -309,62 +343,79 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
               ) : (
                 <>
                   <div className="trans-lang-tabs">
-                    {poi.localizedData.map((item) => (
-                      <button
-                        key={item.langCode}
-                        type="button"
-                        className={`trans-lang-tab ${previewLang === item.langCode ? "active" : ""}`}
-                        onClick={() => setPreviewLang(item.langCode)}>
-                        {item.langCode.toUpperCase()}
-                      </button>
-                    ))}
+                    {poi.localizedData
+                      .filter((item) => !deletedLanguages.has(item.langCode))
+                      .map((item) => (
+                        <div
+                          key={item.langCode}
+                          className="trans-lang-tab-container">
+                          <button
+                            type="button"
+                            className={`trans-lang-tab ${previewLang === item.langCode ? "active" : ""}`}
+                            onClick={() => setPreviewLang(item.langCode)}>
+                            {item.langCode.toUpperCase()}
+                          </button>
+                          <button
+                            type="button"
+                            className="trans-delete-btn"
+                            onClick={() => handleDeleteLanguage(item.langCode)}
+                            title="Xóa ngôn ngữ này">
+                            ✕
+                          </button>
+                        </div>
+                      ))}
                   </div>
 
-                  {selectedPreviewData && (
-                    <div className="trans-preview-content">
-                      <div className="trans-preview-field">
-                        <label className="trans-field-label">
-                          📝 Văn bản đã dịch:
-                        </label>
-                        <div className="trans-field-text">
-                          {selectedPreviewData.descriptionText || (
-                            <span className="trans-field-empty">(Chưa có)</span>
+                  {selectedPreviewData &&
+                    !deletedLanguages.has(selectedPreviewData.langCode) && (
+                      <div className="trans-preview-content">
+                        <div className="trans-preview-field">
+                          <label className="trans-field-label">
+                            📝 Văn bản đã dịch:
+                          </label>
+                          <div className="trans-field-text">
+                            {selectedPreviewData.descriptionText || (
+                              <span className="trans-field-empty">
+                                (Chưa có)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="trans-preview-field">
+                          <label className="trans-field-label">🔊 Audio:</label>
+                          {hasValidAudio(
+                            selectedPreviewData.descriptionAudio,
+                          ) ? (
+                            <div className="trans-audio-row">
+                              <button
+                                type="button"
+                                className="trans-play-btn"
+                                disabled={
+                                  playingLang === selectedPreviewData.langCode
+                                }
+                                onClick={() =>
+                                  playExistingAudio(
+                                    selectedPreviewData.descriptionAudio,
+                                    selectedPreviewData.langCode,
+                                  )
+                                }>
+                                {playingLang === selectedPreviewData.langCode
+                                  ? "⏸ Đang phát..."
+                                  : "▶ Nghe audio"}
+                              </button>
+                              <span className="trans-audio-hint">
+                                ✓ Đã có trên CDN
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="trans-field-empty">
+                              (Chưa có audio)
+                            </span>
                           )}
                         </div>
                       </div>
-
-                      <div className="trans-preview-field">
-                        <label className="trans-field-label">🔊 Audio:</label>
-                        {hasValidAudio(selectedPreviewData.descriptionAudio) ? (
-                          <div className="trans-audio-row">
-                            <button
-                              type="button"
-                              className="trans-play-btn"
-                              disabled={
-                                playingLang === selectedPreviewData.langCode
-                              }
-                              onClick={() =>
-                                playExistingAudio(
-                                  selectedPreviewData.descriptionAudio,
-                                  selectedPreviewData.langCode,
-                                )
-                              }>
-                              {playingLang === selectedPreviewData.langCode
-                                ? "⏸ Đang phát..."
-                                : "▶ Nghe audio"}
-                            </button>
-                            <span className="trans-audio-hint">
-                              ✓ Đã có trên CDN
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="trans-field-empty">
-                            (Chưa có audio)
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </>
               )}
             </div>
@@ -538,6 +589,17 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
           gap: 6px;
           flex-wrap: wrap;
           margin-bottom: 12px;
+          align-items: center;
+        }
+
+        .trans-lang-tab-container {
+          display: flex;
+          align-items: center;
+          position: relative;
+        }
+
+        .trans-lang-tab-container.deleted {
+          opacity: 0.5;
         }
 
         .trans-lang-tab {
@@ -552,7 +614,7 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
           transition: all 0.15s;
         }
 
-        .trans-lang-tab:hover {
+        .trans-lang-tab:hover:not(:disabled) {
           border-color: #4a90e2;
           color: #4a90e2;
         }
@@ -561,6 +623,45 @@ export function EditPoiForm({ poi, onSuccess, onCancel }: EditPoiFormProps) {
           background: #4a90e2;
           color: white;
           border-color: #4a90e2;
+        }
+
+        .trans-lang-tab:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          text-decoration: line-through;
+        }
+
+        .trans-delete-btn {
+          position: absolute;
+          right: -6px;
+          top: -6px;
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          border: none;
+          background: #ef4444;
+          color: white;
+          border-radius: 50%;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        }
+
+        .trans-delete-btn:hover {
+          background: #dc2626;
+          transform: scale(1.15);
+        }
+
+        .trans-delete-btn-undo {
+          background: #10b981;
+        }
+
+        .trans-delete-btn-undo:hover {
+          background: #059669;
         }
 
         .trans-preview-content {
