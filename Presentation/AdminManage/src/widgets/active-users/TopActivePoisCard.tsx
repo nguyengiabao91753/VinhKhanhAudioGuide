@@ -1,23 +1,55 @@
-import type { ActiveSession } from "@/shared/api/sessionApi";
+import { useMemo } from "react";
 
-type TopActivePoisCardProps = {
-  sessions: ActiveSession[];
-  getPoiLabel?: (poiId: string) => string;
+type SessionItem = {
+  sessionId: string;
+  lang?: string | null;
+  currentPoiId?: string | null;
+  tourId?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  device?: string | null;
+  firstSeen?: string | null;
+  lastSeen?: string | null;
+  onlineSeconds: number;
 };
 
-export default function TopActivePoisCard({
-  sessions,
-  getPoiLabel,
-}: TopActivePoisCardProps) {
-  const poiCountMap = sessions.reduce<Record<string, number>>((acc, session) => {
-    if (!session.currentPoiId) return acc;
-    acc[session.currentPoiId] = (acc[session.currentPoiId] || 0) + 1;
-    return acc;
-  }, {});
+type Props = {
+  sessions: SessionItem[];
+  getPoiLabel: (poiId: string) => string;
+};
 
-  const topPois = Object.entries(poiCountMap)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+export default function TopActivePoisCard({ sessions, getPoiLabel }: Props) {
+  const recentPois = useMemo(() => {
+    const sorted = [...sessions]
+      .filter((session) => !!session.currentPoiId)
+      .sort((a, b) => {
+        const timeA = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
+        const timeB = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
+        return timeB - timeA;
+      });
+
+    const seen = new Set<string>();
+
+    return sorted
+      .filter((session) => {
+        const poiId = session.currentPoiId;
+        if (!poiId) return false;
+        if (seen.has(poiId)) return false;
+        seen.add(poiId);
+        return true;
+      })
+      .slice(0, 5)
+      .map((session, index) => {
+        const poiId = session.currentPoiId as string;
+
+        return {
+          rank: index + 1,
+          poiId,
+          label: getPoiLabel(poiId),
+          lastSeen: session.lastSeen,
+        };
+      });
+  }, [sessions, getPoiLabel]);
 
   return (
     <div
@@ -27,63 +59,83 @@ export default function TopActivePoisCard({
         borderRadius: 16,
         padding: 20,
         boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+        minHeight: 280,
       }}
     >
-      <h3 style={{ margin: 0, marginBottom: 16 }}>Top POI đang được nghe</h3>
+      <h3 style={{ margin: 0, marginBottom: 16 }}>POI gần đây</h3>
 
-      {topPois.length === 0 ? (
-        <div style={{ color: "#6b7280" }}>Hiện chưa có POI nào đang phát</div>
+      {recentPois.length === 0 ? (
+        <div
+          style={{
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            padding: 16,
+            color: "#6b7280",
+            background: "#f9fafb",
+          }}
+        >
+          Chưa có POI nào gần đây
+        </div>
       ) : (
-        <div style={{ display: "grid", gap: 10 }}>
-          {topPois.map(([poiId, count], index) => (
+        <div style={{ display: "grid", gap: 12 }}>
+          {recentPois.map((poi) => (
             <div
-              key={poiId}
+              key={poi.poiId}
               style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: 12,
+                padding: 14,
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 gap: 12,
-                padding: "12px 14px",
-                border: "1px solid #e5e7eb",
-                borderRadius: 12,
-                background: "#f9fafb",
+                background: "#fff",
               }}
             >
-              <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ minWidth: 0 }}>
                 <div
                   style={{
-                    fontSize: 12,
-                    color: "#6b7280",
-                    marginBottom: 4,
+                    color: "#9ca3af",
+                    fontSize: 13,
+                    marginBottom: 6,
                   }}
                 >
-                  #{index + 1}
+                  #{poi.rank}
                 </div>
+
                 <div
                   style={{
                     fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    color: "#111827",
+                    wordBreak: "break-word",
+                    marginBottom: 4,
                   }}
-                  title={getPoiLabel ? getPoiLabel(poiId) : poiId}
                 >
-                  {getPoiLabel ? getPoiLabel(poiId) : poiId}
+                  {poi.label}
+                </div>
+
+                <div style={{ color: "#6b7280", fontSize: 13 }}>
+                  {poi.lastSeen
+                    ? `Gần nhất: ${new Date(poi.lastSeen).toLocaleTimeString("vi-VN")}`
+                    : "Chưa rõ thời gian"}
                 </div>
               </div>
 
               <div
                 style={{
-                  minWidth: 44,
-                  textAlign: "center",
-                  padding: "6px 10px",
+                  minWidth: 40,
+                  height: 40,
                   borderRadius: 999,
                   background: "#dcfce7",
-                  color: "#166534",
+                  color: "#16a34a",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   fontWeight: 700,
+                  flexShrink: 0,
                 }}
               >
-                {count}
+                {poi.rank}
               </div>
             </div>
           ))}

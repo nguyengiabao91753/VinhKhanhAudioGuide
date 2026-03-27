@@ -41,31 +41,7 @@ export default function ActiveUsersCard() {
       {error && <p style={{ color: "red" }}>{error}</p>}
 
       {!loading && !error && (
-        <>
-          <div
-            style={{
-              fontSize: 32,
-              fontWeight: 700,
-              marginBottom: 16,
-              color: "#16a34a",
-            }}
-          >
-            {data.total}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-              gap: 10,
-              marginBottom: 16,
-            }}
-          >
-            <MiniStat label="Mobile" value={stats.mobile} color="#16a34a" />
-            <MiniStat label="Desktop" value={stats.desktop} color="#2563eb" />
-            <MiniStat label="GPS" value={stats.gpsCount} color="#9333ea" />
-          </div>
-
+        <>          
           <div
             style={{
               border: "1px solid #e5e7eb",
@@ -102,6 +78,7 @@ export default function ActiveUsersCard() {
             )}
           </div>
 
+          {/* Phần session vẫn giữ nguyên */}
           <div style={{ display: "grid", gap: 10 }}>
             {data.sessions.map((session) => (
               <div
@@ -140,30 +117,6 @@ export default function ActiveUsersCard() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div
-      style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        padding: 12,
-        background: "#f9fafb",
-      }}
-    >
-      <div style={{ color: "#6b7280", marginBottom: 6, fontSize: 14 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
     </div>
   );
 }

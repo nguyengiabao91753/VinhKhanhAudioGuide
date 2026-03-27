@@ -7,8 +7,8 @@ import {
   useMap,
 } from "react-leaflet";
 import L, {
-  type LatLngExpression,
   type LatLngBoundsExpression,
+  type LatLngExpression,
 } from "leaflet";
 import "leaflet.heat";
 import { useActiveUsersSse } from "@/shared/hooks/useActiveUsersSse";
@@ -114,54 +114,111 @@ export default function UserOnlineMap() {
         borderRadius: 16,
         padding: 20,
         boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+        minHeight: 430,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
       <h3 style={{ margin: 0, marginBottom: 12 }}>Bản đồ user online</h3>
 
-      {loading && <p>Đang tải bản đồ...</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      <p style={{ margin: "0 0 16px", color: "#6b7280", fontSize: 14 }}>
+        Có tọa độ: {sessionsWithLocation.length}/{data.total} user online
+      </p>
+
+      {loading && (
+        <div
+          style={{
+            flex: 1,
+            border: "1px solid #e5e7eb",
+            borderRadius: 12,
+            background: "#f9fafb",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#6b7280",
+          }}
+        >
+          Đang tải bản đồ...
+        </div>
+      )}
+
+      {error && (
+        <div
+          style={{
+            flex: 1,
+            border: "1px solid #fecaca",
+            borderRadius: 12,
+            background: "#fef2f2",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "red",
+            padding: 16,
+          }}
+        >
+          {error}
+        </div>
+      )}
 
       {!loading && !error && (
-        <>
-          <div style={{ marginBottom: 12, color: "#374151" }}>
-            Có tọa độ: <strong>{sessionsWithLocation.length}</strong> / {data.total} user online
-          </div>
+        <div
+          style={{
+            flex: 1,
+            minHeight: 340,
+            borderRadius: 12,
+            overflow: "hidden",
+          }}
+        >
+          <MapContainer
+            center={center}
+            zoom={15}
+            style={{ height: "100%", width: "100%" }}
+            scrollWheelZoom={true}
+          >
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-          <div style={{ height: 420, borderRadius: 12, overflow: "hidden" }}>
-            <MapContainer
-              center={center}
-              zoom={15}
-              style={{ height: "100%", width: "100%" }}
-              scrollWheelZoom={true}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            <FitBounds sessions={sessionsWithLocation} />
+            <HeatLayer sessions={sessionsWithLocation} />
 
-              <FitBounds sessions={sessionsWithLocation} />
-              <HeatLayer sessions={sessionsWithLocation} />
-
-              {sessionsWithLocation.map((session) => (
-                <Marker
-                  key={session.sessionId}
-                  position={[session.lat, session.lng]}
-                  icon={markerIcon}
-                >
-                  <Popup>
+            {sessionsWithLocation.map((session) => (
+              <Marker
+                key={session.sessionId}
+                position={[session.lat, session.lng]}
+                icon={markerIcon}
+              >
+                <Popup>
+                  <div>
                     <div>
-                      <div><strong>Session:</strong> {session.sessionId}</div>
-                      <div><strong>Ngôn ngữ:</strong> {session.lang}</div>
-                      <div><strong>Thiết bị:</strong> {session.device}</div>
-                      <div><strong>POI:</strong> {session.currentPoiId ?? "-"}</div>
-                      <div><strong>Tour:</strong> {session.tourId ?? "-"}</div>
-                      <div><strong>Online:</strong> {session.onlineSeconds}s</div>
-                      <div><strong>Lat:</strong> {session.lat}</div>
-                      <div><strong>Lng:</strong> {session.lng}</div>
+                      <strong>Session:</strong> {session.sessionId}
                     </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
-          </div>
-        </>
+                    <div>
+                      <strong>Ngôn ngữ:</strong> {session.lang}
+                    </div>
+                    <div>
+                      <strong>Thiết bị:</strong> {session.device}
+                    </div>
+                    <div>
+                      <strong>POI:</strong> {session.currentPoiId ?? "-"}
+                    </div>
+                    <div>
+                      <strong>Tour:</strong> {session.tourId ?? "-"}
+                    </div>
+                    <div>
+                      <strong>Online:</strong> {session.onlineSeconds}s
+                    </div>
+                    <div>
+                      <strong>Lat:</strong> {session.lat}
+                    </div>
+                    <div>
+                      <strong>Lng:</strong> {session.lng}
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
+        </div>
       )}
     </div>
   );
