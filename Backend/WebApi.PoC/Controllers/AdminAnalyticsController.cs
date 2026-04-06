@@ -1,7 +1,7 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using StackExchange.Redis;
-using System.Globalization;
 using WebApi.PoC.Services;
 
 namespace WebApi.PoC.Controllers
@@ -26,18 +26,28 @@ namespace WebApi.PoC.Controllers
         {
             var sessions = await _sessionTrackingService.GetActiveSessionsAsync();
 
+            var mobileCount = sessions.Count(x => x.DeviceType == "mobile");
+            var desktopCount = sessions.Count(x => x.DeviceType == "desktop");
+
             var result = new
             {
                 total = sessions.Count,
+                mobile = mobileCount,
+                desktop = desktopCount,
                 sessions = sessions.Select(x => new
                 {
                     x.SessionId,
+                    x.DeviceInstanceId,
+                    x.DeviceType,
+                    device = string.IsNullOrWhiteSpace(x.DeviceDisplayName) ? x.Device : x.DeviceDisplayName,
+                    x.DeviceDisplayName,
                     x.Lang,
                     x.CurrentPoiId,
+                    x.CurrentPoiName,
                     x.TourId,
+                    x.TourName,
                     x.Lat,
                     x.Lng,
-                    x.Device,
                     x.FirstSeen,
                     x.LastSeen,
                     onlineSeconds = (int)(x.LastSeen - x.FirstSeen).TotalSeconds
@@ -58,18 +68,28 @@ namespace WebApi.PoC.Controllers
             {
                 var sessions = await _sessionTrackingService.GetActiveSessionsAsync();
 
+                var mobileCount = sessions.Count(x => x.DeviceType == "mobile");
+                var desktopCount = sessions.Count(x => x.DeviceType == "desktop");
+
                 var payload = new
                 {
                     total = sessions.Count,
+                    mobile = mobileCount,
+                    desktop = desktopCount,
                     sessions = sessions.Select(x => new
                     {
                         sessionId = x.SessionId,
+                        deviceInstanceId = x.DeviceInstanceId,
+                        deviceType = x.DeviceType,
+                        device = string.IsNullOrWhiteSpace(x.DeviceDisplayName) ? x.Device : x.DeviceDisplayName,
+                        deviceDisplayName = x.DeviceDisplayName,
                         lang = x.Lang,
                         currentPoiId = x.CurrentPoiId,
+                        currentPoiName = x.CurrentPoiName,
                         tourId = x.TourId,
+                        tourName = x.TourName,
                         lat = x.Lat,
                         lng = x.Lng,
-                        device = x.Device,
                         firstSeen = x.FirstSeen,
                         lastSeen = x.LastSeen,
                         onlineSeconds = (int)(x.LastSeen - x.FirstSeen).TotalSeconds
@@ -78,7 +98,7 @@ namespace WebApi.PoC.Controllers
 
                 var json = JsonSerializer.Serialize(payload);
 
-                await Response.WriteAsync($"event: activeUsers\n");
+                await Response.WriteAsync("event: activeUsers\n");
                 await Response.WriteAsync($"data: {json}\n\n");
                 await Response.Body.FlushAsync();
 

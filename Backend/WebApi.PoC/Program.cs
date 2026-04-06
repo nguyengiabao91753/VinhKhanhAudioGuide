@@ -50,6 +50,7 @@ builder.Services.AddScoped<ITourService, TourService>();
 builder.Services.AddSingleton<RedisSessionStore>();
 builder.Services.AddScoped<ISessionTrackingService, SessionTrackingService>();
 builder.Services.AddHostedService<OnlineUserTrendSnapshotService>();
+builder.Services.AddHostedService<SessionCleanupHostedService>();
 
 // Add multilingual services
 builder.Services.AddScoped<IOllamaService, OllamaService>();

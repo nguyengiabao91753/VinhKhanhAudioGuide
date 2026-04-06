@@ -1,17 +1,37 @@
 import { useMemo } from "react";
 import { useActiveUsersSse } from "@/shared/hooks/useActiveUsersSse";
 
+type SessionItem = {
+  sessionId: string;
+  lang?: string;
+  lat?: number | null;
+  lng?: number | null;
+  onlineSeconds: number;
+
+  device?: string;
+  deviceType?: "mobile" | "desktop" | string;
+  deviceDisplayName?: string;
+  deviceInstanceId?: string;
+
+  currentPoiId?: string | null;
+  currentPoiName?: string | null;
+  tourId?: string | null;
+  tourName?: string | null;
+};
+
 export default function ActiveUsersCard() {
   const { data, loading, error } = useActiveUsersSse();
 
+  const sessions = (data.sessions ?? []) as SessionItem[];
+
   const stats = useMemo(() => {
-    const mobile = data.sessions.filter((s) => s.device === "mobile").length;
-    const desktop = data.sessions.filter((s) => s.device === "desktop").length;
-    const gpsCount = data.sessions.filter(
+    const mobile = sessions.filter((s) => s.deviceType === "mobile").length;
+    const desktop = sessions.filter((s) => s.deviceType === "desktop").length;
+    const gpsCount = sessions.filter(
       (s) => typeof s.lat === "number" && typeof s.lng === "number"
     ).length;
 
-    const languageMap = data.sessions.reduce<Record<string, number>>((acc, session) => {
+    const languageMap = sessions.reduce<Record<string, number>>((acc, session) => {
       const lang = session.lang || "unknown";
       acc[lang] = (acc[lang] || 0) + 1;
       return acc;
@@ -23,7 +43,7 @@ export default function ActiveUsersCard() {
       gpsCount,
       languageMap,
     };
-  }, [data.sessions]);
+  }, [sessions]);
 
   return (
     <div
@@ -41,7 +61,7 @@ export default function ActiveUsersCard() {
       {error && <p style={{ color: "red" }}>{error}</p>}
 
       {!loading && !error && (
-        <>          
+        <>
           <div
             style={{
               border: "1px solid #e5e7eb",
@@ -51,6 +71,21 @@ export default function ActiveUsersCard() {
               marginBottom: 16,
             }}
           >
+            <div style={{ fontWeight: 600, marginBottom: 10 }}>Tổng quan nhanh</div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 8,
+                marginBottom: 12,
+              }}
+            >
+              <StatBox label="Mobile" value={stats.mobile} />
+              <StatBox label="Desktop" value={stats.desktop} />
+              <StatBox label="Có GPS" value={stats.gpsCount} />
+            </div>
+
             <div style={{ fontWeight: 600, marginBottom: 10 }}>Ngôn ngữ đang dùng</div>
 
             {Object.keys(stats.languageMap).length === 0 ? (
@@ -78,9 +113,8 @@ export default function ActiveUsersCard() {
             )}
           </div>
 
-          {/* Phần session vẫn giữ nguyên */}
           <div style={{ display: "grid", gap: 10 }}>
-            {data.sessions.map((session) => (
+            {sessions.map((session) => (
               <div
                 key={session.sessionId}
                 style={{
@@ -94,16 +128,26 @@ export default function ActiveUsersCard() {
                   <strong>Session:</strong> {shortSessionId(session.sessionId)}
                 </div>
                 <div>
-                  <strong>Ngôn ngữ:</strong> {session.lang}
+                  <strong>Ngôn ngữ:</strong> {session.lang || "-"}
                 </div>
                 <div>
-                  <strong>Thiết bị:</strong> {session.device}
+                  <strong>Thiết bị:</strong>{" "}
+                  {session.deviceDisplayName || session.device || "-"}
                 </div>
                 <div>
-                  <strong>POI:</strong> {session.currentPoiId ?? "-"}
+                  <strong>Mã thiết bị:</strong>{" "}
+                  {session.deviceInstanceId
+                    ? shortDeviceInstanceId(session.deviceInstanceId)
+                    : "-"}
                 </div>
                 <div>
-                  <strong>Tour:</strong> {session.tourId ?? "-"}
+                  <strong>Loại:</strong> {session.deviceType || "-"}
+                </div>
+                <div>
+                  <strong>POI:</strong> {session.currentPoiName || session.currentPoiId || "-"}
+                </div>
+                <div>
+                  <strong>Tour:</strong> {session.tourName || session.tourId || "-"}
                 </div>
                 <div>
                   <strong>Online:</strong> {formatOnlineTime(session.onlineSeconds)}
@@ -111,7 +155,7 @@ export default function ActiveUsersCard() {
               </div>
             ))}
 
-            {data.sessions.length === 0 && (
+            {sessions.length === 0 && (
               <div style={{ color: "#6b7280" }}>Hiện chưa có user online</div>
             )}
           </div>
@@ -121,9 +165,31 @@ export default function ActiveUsersCard() {
   );
 }
 
+function StatBox({ label, value }: { label: string; value: number }) {
+  return (
+    <div
+      style={{
+        padding: "10px 12px",
+        borderRadius: 10,
+        background: "#fff",
+        border: "1px solid #e5e7eb",
+      }}
+    >
+      <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontWeight: 700, fontSize: 18 }}>{value}</div>
+    </div>
+  );
+}
+
 function shortSessionId(sessionId: string) {
   if (!sessionId) return "-";
   return sessionId.length <= 16 ? sessionId : `${sessionId.slice(0, 8)}...${sessionId.slice(-6)}`;
+}
+
+function shortDeviceInstanceId(deviceInstanceId: string) {
+  if (!deviceInstanceId) return "-";
+  const clean = deviceInstanceId.replaceAll("-", "");
+  return clean.length <= 6 ? clean.toUpperCase() : clean.slice(-6).toUpperCase();
 }
 
 function formatOnlineTime(seconds: number) {

@@ -4,7 +4,9 @@ import { sendSessionPing } from "./sessionHeartbeat";
 type UseSessionHeartbeatParams = {
   lang?: string;
   currentPoiId?: string | null;
+  currentPoiName?: string | null;
   tourId?: string | null;
+  tourName?: string | null;
   lat?: number | null;
   lng?: number | null;
 };
@@ -12,7 +14,9 @@ type UseSessionHeartbeatParams = {
 export function useSessionHeartbeat({
   lang = "vi",
   currentPoiId = null,
+  currentPoiName = null,
   tourId = null,
+  tourName = null,
   lat = null,
   lng = null,
 }: UseSessionHeartbeatParams) {
@@ -24,7 +28,9 @@ export function useSessionHeartbeat({
         await sendSessionPing({
           lang,
           currentPoiId,
+          currentPoiName,
           tourId,
+          tourName,
           lat,
           lng,
         });
@@ -45,5 +51,5 @@ export function useSessionHeartbeat({
       mounted = false;
       clearInterval(intervalId);
     };
-  }, [lang, currentPoiId, tourId, lat, lng]);
+  }, [lang, currentPoiId, currentPoiName, tourId, tourName, lat, lng]);
 }

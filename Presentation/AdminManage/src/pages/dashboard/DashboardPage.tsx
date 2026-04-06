@@ -7,7 +7,7 @@ import { useActiveUsersSse } from '@/shared/hooks/useActiveUsersSse'
 import UserOnlineMap from '@/widgets/active-users/UserOnlineMap'
 import TopActivePoisCard from '@/widgets/active-users/TopActivePoisCard'
 import { OnlineTrendCard } from '@/widgets/online-trend'
-import { CurrentTimeCard } from "@/widgets/current-time";
+import { CurrentTimeCard } from '@/widgets/current-time'
 
 type DashboardStats = {
   poiCount: number
@@ -18,6 +18,22 @@ type DashboardStats = {
   mobile: number
   loading: boolean
   error: string | null
+}
+
+type SessionItem = {
+  sessionId: string
+  lang?: string
+  currentPoiId?: string | null
+  currentPoiName?: string | null
+  tourId?: string | null
+  tourName?: string | null
+  lat?: number | null
+  lng?: number | null
+  device?: string
+  deviceType?: 'mobile' | 'desktop' | string
+  deviceDisplayName?: string
+  deviceInstanceId?: string
+  onlineSeconds: number
 }
 
 export const DashboardPage = () => {
@@ -36,6 +52,8 @@ export const DashboardPage = () => {
   const [tours, setTours] = useState<Tour[]>([])
   const [selectedSessionId, setSelectedSessionId] = useState('')
   const { data: activeUsersData } = useActiveUsersSse()
+
+  const sessions = (activeUsersData.sessions ?? []) as SessionItem[]
 
   const getPoiLabel = (poiId: string) => {
     const poi = pois.find((p) => String(p.id) === poiId)
@@ -66,13 +84,15 @@ export const DashboardPage = () => {
         const viewCount = Math.max(1200, poiCount * 45 + tourCount * 110)
         const userCount = Math.max(450, poiCount * 12 + tourCount * 35)
 
-        const desktop = activeUsersData.sessions.filter(
-          (s) => s.device === 'desktop'
-        ).length
+        const desktop =
+          typeof (activeUsersData as any).desktop === 'number'
+            ? (activeUsersData as any).desktop
+            : sessions.filter((s) => s.deviceType === 'desktop').length
 
-        const mobile = activeUsersData.sessions.filter(
-          (s) => s.device === 'mobile'
-        ).length
+        const mobile =
+          typeof (activeUsersData as any).mobile === 'number'
+            ? (activeUsersData as any).mobile
+            : sessions.filter((s) => s.deviceType === 'mobile').length
 
         setPois(nextPois)
         setTours(nextTours)
@@ -100,32 +120,30 @@ export const DashboardPage = () => {
     }
 
     fetchStats()
-  }, [activeUsersData])
+  }, [activeUsersData, sessions])
 
   useEffect(() => {
-    if (!activeUsersData.sessions.length) {
+    if (!sessions.length) {
       setSelectedSessionId('')
       return
     }
 
-    const stillExists = activeUsersData.sessions.some(
+    const stillExists = sessions.some(
       (session) => session.sessionId === selectedSessionId
     )
 
     if (!stillExists) {
-      setSelectedSessionId(activeUsersData.sessions[0].sessionId)
+      setSelectedSessionId(sessions[0].sessionId)
     }
-  }, [activeUsersData.sessions, selectedSessionId])
+  }, [sessions, selectedSessionId])
 
   const selectedSession = useMemo(() => {
     return (
-      activeUsersData.sessions.find(
-        (session) => session.sessionId === selectedSessionId
-      ) ||
-      activeUsersData.sessions[0] ||
+      sessions.find((session) => session.sessionId === selectedSessionId) ||
+      sessions[0] ||
       null
     )
-  }, [activeUsersData.sessions, selectedSessionId])
+  }, [sessions, selectedSessionId])
 
   const formatOnlineDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -146,11 +164,11 @@ export const DashboardPage = () => {
       <div
         className="page-header"
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
           gap: 20,
-          flexWrap: "wrap",
+          flexWrap: 'wrap',
         }}
       >
         <div>
@@ -237,7 +255,14 @@ export const DashboardPage = () => {
             </svg>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, gap: '12px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              flex: 1,
+              gap: '12px',
+            }}
+          >
             <div style={{ flex: 1 }}>
               <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 2 }}>
                 Mobile
@@ -259,7 +284,6 @@ export const DashboardPage = () => {
                 {stats.desktop}
               </div>
             </div>
-
           </div>
         </div>
 
@@ -288,16 +312,16 @@ export const DashboardPage = () => {
         }}
       >
         <div
-            style={{
-              minWidth: 0,
-              height: '100%',
-              display: 'flex',
-            }}
-          >
-            <div style={{ flex: 1 }}>
-              <UserOnlineMap />
-            </div>
+          style={{
+            minWidth: 0,
+            height: '100%',
+            display: 'flex',
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <UserOnlineMap />
           </div>
+        </div>
 
         <div
           style={{
@@ -318,7 +342,7 @@ export const DashboardPage = () => {
             Tổng số phiên online: {activeUsersData.total}
           </p>
 
-          {activeUsersData.sessions.length === 0 ? (
+          {sessions.length === 0 ? (
             <div
               style={{
                 border: '1px solid #e5e7eb',
@@ -340,7 +364,7 @@ export const DashboardPage = () => {
                 paddingRight: 4,
               }}
             >
-              {activeUsersData.sessions.map((session) => {
+              {sessions.map((session) => {
                 const isSelected = session.sessionId === selectedSession?.sessionId
 
                 return (
@@ -388,7 +412,7 @@ export const DashboardPage = () => {
                       Ngôn ngữ: {session.lang || '-'}
                     </div>
                     <div style={{ color: '#6b7280', fontSize: 14 }}>
-                      Thiết bị: {session.device || '-'}
+                      Thiết bị: {session.deviceDisplayName || session.device || '-'}
                     </div>
                   </button>
                 )
@@ -444,16 +468,19 @@ export const DashboardPage = () => {
                 <strong>Ngôn ngữ:</strong> {selectedSession.lang || '-'}
               </div>
               <div>
-                <strong>Thiết bị:</strong> {selectedSession.device || '-'}
+                <strong>Thiết bị:</strong>{' '}
+                {selectedSession.deviceDisplayName || selectedSession.device || '-'}
               </div>
               <div>
                 <strong>POI:</strong>{' '}
-                {selectedSession.currentPoiId
-                  ? getPoiLabel(selectedSession.currentPoiId)
-                  : '-'}
+                {selectedSession.currentPoiName ||
+                  (selectedSession.currentPoiId
+                    ? getPoiLabel(selectedSession.currentPoiId)
+                    : '-')}
               </div>
               <div>
-                <strong>Tour:</strong> {selectedSession.tourId || '-'}
+                <strong>Tour:</strong>{' '}
+                {selectedSession.tourName || selectedSession.tourId || '-'}
               </div>
               <div>
                 <strong>GPS:</strong>{' '}
@@ -483,7 +510,7 @@ export const DashboardPage = () => {
         <OnlineTrendCard />
 
         <TopActivePoisCard
-          sessions={activeUsersData.sessions}
+          sessions={sessions}
           getPoiLabel={getPoiLabel}
         />
       </div>

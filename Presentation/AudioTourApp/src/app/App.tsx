@@ -270,7 +270,13 @@ export default function App({ initialLanguage = 'vi' }: AppProps) {
   useSessionHeartbeat({
   lang: language,
   currentPoiId: playingPoi ? playingPoi.id : null,
+  currentPoiName: playingPoi ? poiName(playingPoi, language) : null,
   tourId: selectedTour ? selectedTour.id : null,
+  tourName: selectedTour
+    ? (language === "vi" ? selectedTour.name.vi : selectedTour.name.en) ||
+      selectedTour.name.vi ||
+      selectedTour.name.en
+    : null,
   lat,
   lng,
   });

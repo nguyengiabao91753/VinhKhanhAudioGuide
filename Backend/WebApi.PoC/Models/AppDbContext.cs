@@ -25,6 +25,8 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<tour_points> tour_points { get; set; }
 
+    public virtual DbSet<VisitorSession> VisitorSessions { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -103,6 +105,86 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey(d => d.tour_point_id)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_tour_points_pois");
+        });
+
+        modelBuilder.Entity<VisitorSession>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.HasIndex(e => e.SessionId)
+                .IsUnique();
+
+            entity.Property(e => e.SessionId)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.Property(e => e.DeviceInstanceId)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.Property(e => e.DeviceDisplayName)
+                .HasMaxLength(200)
+                .IsUnicode(true);
+
+            entity.Property(e => e.DeviceType)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+
+            entity.Property(e => e.DeviceModel)
+                .HasMaxLength(150)
+                .IsUnicode(true);
+
+            entity.Property(e => e.BrowserName)
+                .HasMaxLength(100)
+                .IsUnicode(true);
+
+            entity.Property(e => e.OsName)
+                .HasMaxLength(100)
+                .IsUnicode(true);
+
+            entity.Property(e => e.Lang)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+
+            entity.Property(e => e.Timezone)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.Property(e => e.UserAgentRaw)
+                .HasMaxLength(1000)
+                .IsUnicode(true);
+
+            entity.Property(e => e.CurrentPoiId)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.Property(e => e.CurrentPoiName)
+                .HasMaxLength(255)
+                .IsUnicode(true);
+
+            entity.Property(e => e.TourId)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+
+            entity.Property(e => e.TourName)
+                .HasMaxLength(255)
+                .IsUnicode(true);
+
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getutcdate())");
+
+            entity.Property(e => e.UpdatedAt)
+                .HasDefaultValueSql("(getutcdate())");
+
+            entity.Property(e => e.StartedAt)
+                .HasDefaultValueSql("(getutcdate())");
+
+            entity.Property(e => e.LastSeenAt)
+                .HasDefaultValueSql("(getutcdate())");
         });
 
         OnModelCreatingPartial(modelBuilder);

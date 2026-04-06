@@ -7,5 +7,6 @@ namespace WebApi.PoC.Services
     {
         Task PingAsync(SessionPingRequest request);
         Task<List<ActiveSession>> GetActiveSessionsAsync();
+        Task MarkExpiredSessionOfflineAsync(string sessionId);
     }
 }
