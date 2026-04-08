@@ -16,7 +16,7 @@ function normalizeBaseUrl(url) {
 
 function createQrPayload(
   redirectUrl = DEFAULT_REDIRECT,
-  validHours = 2,
+  validHours = 1/60,
   checkBaseUrl = DEFAULT_CHECK_BASE_URL
 ) {
   const now = new Date();

@@ -58,16 +58,24 @@ function handleCheckRequest(req, res) {
   const fromDate = new Date(from);
   const toDate = new Date(to);
 
+  console.log('DEBUG: now =', now.toISOString());
+  console.log('DEBUG: from =', from);
+  console.log('DEBUG: to =', to);
+  console.log('DEBUG: now >= fromDate:', now >= fromDate);
+  console.log('DEBUG: now <= toDate:', now <= toDate);
+
   if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
     respondHtml(res, 400, 'QR không hợp lệ', 'Dữ liệu thời gian QR không hợp lệ.');
     return;
   }
 
   if (now < fromDate || now > toDate) {
+    console.log('DEBUG: QR expired');
     respondHtml(res, 410, 'QR quá hạn sử dụng', 'QR quá hạn sử dụng.');
     return;
   }
 
+  console.log('DEBUG: QR valid, redirecting to', redirect);
   res.writeHead(302, { Location: redirect });
   res.end();
 }
